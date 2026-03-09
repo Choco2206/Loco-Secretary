@@ -716,10 +716,14 @@ function queueRoleAnnouncement(guild, userId) {
       if (validMembers.length === 1) {
         const embed = buildRoleAnnouncementEmbed(validMembers[0]);
         await safeSend(
-          CONFIG.channels.announcements,
-          { embeds: [embed] },
-          'roleAnnouncement-single'
-        );
+  CONFIG.channels.announcements,
+  {
+    content: '@everyone',
+    embeds: [embed],
+    allowedMentions: { parse: ['everyone'] }
+  },
+  'roleAnnouncement-single'
+);
         return;
       }
 
