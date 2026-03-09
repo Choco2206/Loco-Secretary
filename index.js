@@ -10,12 +10,13 @@ const {
 
 const CONFIG = {
   locoVoteBotId: '1478770226651992134',
+  specialUserId: '426401816037687296',
 
   channels: {
     welcome: '1426178803960516742',
     goodbye: '1426178916455944242',
     announcements: '1426178139234631700',
-    capslock: '1426178916455944242',
+    personality: '1426178916455944242',
 
     pollsByEventDay: {
       0: '1438857782442065960', // Sonntag
@@ -309,39 +310,136 @@ Willkommen im Team, cuties. 💋`,
     ],
   },
 
-  capslock: {
+  personality: {
     enabled: true,
-    minLength: 8,
-    uppercaseRatioThreshold: 0.75,
     userCooldownMs: 60_000,
-    globalCooldownMs: 15_000,
-    replies: [
-      'Hey hey… nicht so laut, Süßer. Ich hör dich auch so. 💋',
-      'Ganz ruhig Tiger… schreien steht dir nicht halb so gut wie flirten. 😏',
-      'Wenn du so laut wirst, werde ich ja ganz nervös hier. 💅',
-      'Süßer… Capslock ist kein offizieller Kommunikationsstil.',
-      'Du musst mich nicht anschreien, ich bin direkt hier.',
-      'Ganz ruhig… ich versteh dich auch ohne Drama.',
-      'So laut? Du willst wohl unbedingt meine Aufmerksamkeit. 😘',
-      'Hey… ich bin nur die Secretary, nicht dein Boxring.',
-      'Ruhig Blut, Hübscher. Wir sind hier immer noch im Rudel. 🐺',
-      'Capslock detected… jemand ist aber aufgeregt.',
-      'Wenn du so schreist, denken gleich alle du bist nervös.',
-      'Tief durchatmen… das hilft meistens.',
-      'Ganz ruhig… das Rudel beobachtet dich schon.',
-      'Süßer… du bist hier nicht beim Kriegsschrei.',
-      'Das hier ist Discord, nicht das Stadion.',
-      'So laut und trotzdem so cute… beeindruckend.',
-      'Ich hör dich, keine Sorge. Aber ein bisschen leiser steht dir besser.',
-      'Hey… ich arbeite hier. Nicht schreien, flirten.',
-      'Ganz locker bleiben… ich hab alles unter Kontrolle.',
-      'Wenn du so laut wirst, muss ich dich noch beruhigen. 💋',
-      'Capslock aktiviert… Drama Level steigt.',
-      'Bitte einmal Lautstärke runterdrehen. Danke.',
-      'Ich glaube dein Capslock hängt.',
-      'Kleiner Technik-Tipp: Capslock aus hilft manchmal.',
-      'Ganz ruhig… wir sind doch alle Locos hier.',
-    ],
+    globalCooldownMs: 12_000,
+
+    capslock: {
+      enabled: true,
+      minTextLength: 8,
+      uppercaseRatioThreshold: 0.68,
+      minCapsWords: 3,
+      longCapsWordLength: 5,
+      replies: [
+        'Hey hey… nicht so laut, Süßer. Ich hör dich auch so. 💋',
+        'Ganz ruhig Tiger… schreien steht dir nicht halb so gut wie flirten. 😏',
+        'Wenn du so laut wirst, werde ich ja ganz nervös hier. 💅',
+        'Süßer… Capslock ist kein offizieller Kommunikationsstil.',
+        'Du musst mich nicht anschreien, ich bin direkt hier.',
+        'Ganz ruhig… ich versteh dich auch ohne Drama.',
+        'So laut? Du willst wohl unbedingt meine Aufmerksamkeit. 😘',
+        'Hey… ich bin nur die Secretary, nicht dein Boxring.',
+        'Ruhig Blut, Hübscher. Wir sind hier immer noch im Rudel. 🐺',
+        'Capslock detected… jemand ist aber aufgeregt.',
+        'Wenn du so schreist, denken gleich alle du bist nervös.',
+        'Tief durchatmen… das hilft meistens.',
+        'Ganz ruhig… das Rudel beobachtet dich schon.',
+        'Süßer… du bist hier nicht beim Kriegsschrei.',
+        'Das hier ist Discord, nicht das Stadion.',
+        'So laut und trotzdem so cute… beeindruckend.',
+        'Ich hör dich, keine Sorge. Aber ein bisschen leiser steht dir besser.',
+        'Hey… ich arbeite hier. Nicht schreien, flirten.',
+        'Ganz locker bleiben… ich hab alles unter Kontrolle.',
+        'Wenn du so laut wirst, muss ich dich noch beruhigen. 💋',
+        'Capslock aktiviert… Drama Level steigt.',
+        'Bitte einmal Lautstärke runterdrehen. Danke.',
+        'Ich glaube dein Capslock hängt.',
+        'Kleiner Technik-Tipp: Capslock aus hilft manchmal.',
+        'Ganz ruhig… wir sind doch alle Locos hier.',
+      ],
+    },
+
+    badLanguage: {
+      enabled: true,
+
+      mildWords: [
+        'scheiße','scheisse','shit','kacke','verdammt','mist','dreck','müll','blöd','doof',
+        'nervig','nervt','kotzt','kotz','kotzen','alter','junge','digga','diggah','diggi',
+        'bro','brudi','boah','ey','bullshit','blödsinn','unsinn','lächerlich','peinlich','dumm',
+        'verflucht','scheiss','scheiss egal','scheiss drauf','shit happens','shitstorm','shitshow','verdammt ey','verdammt man','boah alter',
+        'boah man','boah ey','boah digga','boah brudi','nervt hart','nervt übel','nervt extrem','nervt brutal','kotzt hart','kotzt übel',
+        'kotzt extrem','kotzt brutal','kack server','scheiss server','shit server','kack game','scheiss game','shit match','scheiss match','kack match',
+        'kack runde','scheiss runde','shit runde','kack team','scheiss team','shit team','kack situation','scheiss situation','shit situation','so ein mist',
+        'so ein dreck','das nervt','das ist müll','dumme idee','dumme sache','kack spiel','scheiss spiel','shit game','shit move','shit moment',
+        'scheiss moment','kack situation','so ein scheiss','verdammt nochmal','drauf geschissen','kack drauf','scheiss tag','kack tag','kack timing','scheiss timing',
+        'shit timing','kack moment','so ein timing','so ein tag','verdammt nochmal ey','das ist dreck','waste','rotz','nervensägen','mies','grottig'
+      ],
+
+      strongWords: [
+        'fuck','fucking','ficker','fick','ficken','gefickt','fick dich','fick euch','fick ihn','fick sie',
+        'fuck you','fuck off','motherfucker','mf','mfer','hurensohn','huan','huan sohn','hs','bastard',
+        'wichser','wixer','arschloch','arsch','arschkopf','arschgesicht','arschkriecher','arschgeige','arschgeburt','arschclown',
+        'arschkind','arschhaufen','arschhirn','arschidiot','idiot','vollidiot','trottel','spast','spasti','spastik',
+        'mongo','mongoloid','dummkopf','hirni','hirnlos','hirntot','depp','deppat','deppkopf','drecksack',
+        'drecksau','dreckskerl','drecksidiot','drecksarsch','drecksloch','pisskopf','pissbirne','pissnelke','pisser','pissgesicht',
+        'pisskind','penner','vollpenner','opfer','du opfer','lappen','clown','vollclown','scheisskerl','scheissidiot',
+        'scheissarsch','scheisswichser','scheisspenner','fickfehler','fehlgeburt','missgeburt','dumme sau','dumme kuh','dumme nuss','dumme bratze',
+        'dumme schlampe','schlampe','nutte','hure','fotze','fotzenkind','fickfresse','fickgesicht','fickkopf','fickarsch',
+        'arschficker','dreckshure','drecksnutte','arschhure','arschfresse','pissfresse','hurenkind','wichskopf','drecksfotze','arschgeburt'
+      ],
+
+      mildReplies: [
+        'Na na mein Süßer… ein bisschen hübscher ausdrücken darfst du dich schon. 💋',
+        'So eine Sprache und dann so ein Gesicht dazu? Schwierig, cutie. 😏',
+        'Ein bisschen weniger Drama in der Wortwahl wäre hot, Süßer.',
+        'Nana… wir können das auch stilvoller formulieren, Hübscher. 💅',
+        'So reden wir aber nicht, wenn wir Eindruck machen wollen. 😘',
+        'Ganz ruhig, cutie. Weniger fluchen, mehr Klasse.',
+        'Ich versteh deinen Frust, aber deine Wortwahl braucht noch Feinschliff. 💋',
+        'Na… ein bisschen eleganter darfst du dich schon ausdrücken.',
+        'Hübscher, deine Sprache stolpert gerade etwas. 😏',
+        'Ich mag Chaos, aber Gossensprache steht dir nicht ganz so gut.',
+      ],
+
+      strongReplies: [
+        'Na na, Süßer. Achte bitte auf deine Sprache, bevor ich wirklich ungemütlich werde. 💅',
+        'So reden wir hier aber nicht, Hübscher. Ein bisschen Stil bitte. 😘',
+        'Das war sprachlich jetzt eher unterirdisch, cutie. Versuch’s nochmal hübscher. 💋',
+        'Nicht in diesem Ton, mein Süßer. Ich sehe und merke mir sowas. 😏',
+        'Ein bisschen weniger Eskalation in der Wortwahl wäre angebracht.',
+        'So eine Sprache? Und ich dachte, wir hätten hier Niveau. 💅',
+        'Hübscher, reiß dich sprachlich bitte zusammen.',
+        'Wenn du weiter so redest, werde ich wirklich sauer. Und das willst du nicht. 💋',
+        'Nein nein… so sprechen wir nicht mit mir und auch nicht hier im Rudel.',
+        'Einmal tief durchatmen und dann bitte mit etwas mehr Stil nochmal.',
+      ],
+    },
+
+    specialUser: {
+      enabled: true,
+      triggerUserId: '426401816037687296',
+      channelId: '1426178916455944242',
+      dailyConversationLimit: 5,
+      randomResponseChance: 0.4,
+      followUpMaxReplies: 3,
+
+      openerReplies: [
+        'Na schau mal einer an… du schon wieder. 😏',
+        'Kaum schreibst du was, muss ich natürlich wieder hinschauen. 💋',
+        'Ach, mein Lieblings-Stressfaktor ist wieder da. Cute. 🐺',
+        'Du tippst, ich lese. Leider viel zu aufmerksam. 😘',
+        'Na Süßer, was ist heute wieder dein Problem?',
+        'Ich wusste doch, dass du heute noch auftauchst.',
+        'Na, mein kleiner Chaoslieferant ist wieder online. 😏',
+        'Du schon wieder? Interessant, wie oft du heute meine Aufmerksamkeit willst. 💋',
+        'Kaum wird’s ruhig, tauchst du natürlich wieder auf.',
+        'Sag bloß, du hast mich vermisst. 😘',
+      ],
+
+      followUpReplies: [
+        'Mhm… jetzt hör ich dir leider schon wieder zu. 💋',
+        'Du gibst aber auch wirklich nicht so schnell Ruhe, hm? 😏',
+        'Interessant. Erzähl weiter, Süßer.',
+        'Na los, was kommt jetzt noch? Ich bin gespannt.',
+        'Ich merk schon… ohne mich wird dir schnell langweilig. 💅',
+        'Du magst meine Aufmerksamkeit wohl wirklich sehr, hm?',
+        'Du schreibst, ich antworte. Irgendwie läuft das erschreckend gut zwischen uns. 😘',
+        'Na komm, jetzt bist du schon drin im Gespräch. Dann zieh auch durch.',
+        'Ich höre zu. Mehr oder weniger freiwillig. 😏',
+        'So, und jetzt sag mir noch, was du eigentlich willst, cutie.',
+      ],
+    },
   },
 
   pollReminder: {
@@ -442,13 +540,17 @@ const client = new Client({
 });
 
 const recentBanIds = new Set();
-const capslockUserCooldowns = new Map();
-let lastGlobalCapslockReplyAt = 0;
 
-const pendingRoleAnnouncements = new Map(); // guildId -> Set(userId)
-const roleAnnouncementTimers = new Map(); // guildId -> timeout
+const pendingRoleAnnouncements = new Map();
+const roleAnnouncementTimers = new Map();
 
-const sentPollReminderKeys = new Set(); // `${date}:${channelId}`
+const sentPollReminderKeys = new Set();
+
+const personalityUserCooldowns = new Map();
+let lastGlobalPersonalityReplyAt = 0;
+
+const specialUserDailyState = new Map();
+const activeSpecialConversations = new Map();
 
 function getChannel(channelId) {
   if (!channelId) return null;
@@ -479,41 +581,141 @@ function pickRandom(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-function analyzeUppercaseRatio(text) {
-  const letters = text.match(/[A-Za-zÄÖÜäöüß]/g) || [];
-  const uppercaseLetters = text.match(/[A-ZÄÖÜ]/g) || [];
+function getTodayKey(now = new Date()) {
+  return now.toISOString().slice(0, 10);
+}
 
-  if (letters.length === 0) {
-    return { lettersCount: 0, uppercaseRatio: 0 };
+function getTomorrowEventDayNumber(now = new Date()) {
+  return (now.getDay() + 1) % 7;
+}
+
+function normalizeText(text) {
+  return (text || '').toLowerCase();
+}
+
+function messageContainsTerm(contentLower, term) {
+  return contentLower.includes(term.toLowerCase());
+}
+
+function extractUniqueMentions(content) {
+  const matches = content.match(/<@!?\d+>/g) || [];
+  return [...new Set(matches)];
+}
+
+function canUsePersonalityReply(userId) {
+  const now = Date.now();
+  const userLast = personalityUserCooldowns.get(userId) || 0;
+
+  if (now - userLast < CONFIG.personality.userCooldownMs) return false;
+  if (now - lastGlobalPersonalityReplyAt < CONFIG.personality.globalCooldownMs) return false;
+
+  return true;
+}
+
+function markPersonalityReplyUsed(userId) {
+  const now = Date.now();
+  personalityUserCooldowns.set(userId, now);
+  lastGlobalPersonalityReplyAt = now;
+}
+
+function getSpecialUserState() {
+  const today = getTodayKey();
+  const existing = specialUserDailyState.get(CONFIG.specialUserId);
+
+  if (existing && existing.dateKey === today) return existing;
+
+  const fresh = {
+    dateKey: today,
+    newConversationsStarted: 0,
+  };
+
+  specialUserDailyState.set(CONFIG.specialUserId, fresh);
+  return fresh;
+}
+
+function shouldHandlePersonalityChannel(message) {
+  if (!CONFIG.personality.enabled) return false;
+  if (!message || !message.author || message.author.bot) return false;
+  if (message.channel.id !== CONFIG.channels.personality) return false;
+  return true;
+}
+
+function analyzeCapsPattern(text) {
+  const trimmed = (text || '').trim();
+  if (!trimmed || trimmed.length < CONFIG.personality.capslock.minTextLength) {
+    return {
+      totalLetters: 0,
+      uppercaseLetters: 0,
+      uppercaseRatio: 0,
+      capsWordsCount: 0,
+      hasLongCapsWord: false,
+      triggered: false,
+    };
   }
 
+  const allLetters = trimmed.match(/[A-Za-zÄÖÜäöüß]/g) || [];
+  const uppercaseLetters = trimmed.match(/[A-ZÄÖÜ]/g) || [];
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  let capsWordsCount = 0;
+  let hasLongCapsWord = false;
+
+  for (const word of words) {
+    const cleaned = word.replace(/[^A-Za-zÄÖÜäöüß]/g, '');
+    if (!cleaned) continue;
+
+    const hasLetter = /[A-Za-zÄÖÜäöüß]/.test(cleaned);
+    const fullyUpper = cleaned === cleaned.toUpperCase() && cleaned !== cleaned.toLowerCase();
+
+    if (hasLetter && fullyUpper && cleaned.length >= 2) {
+      capsWordsCount += 1;
+    }
+
+    if (hasLetter && fullyUpper && cleaned.length >= CONFIG.personality.capslock.longCapsWordLength) {
+      hasLongCapsWord = true;
+    }
+  }
+
+  const totalLetters = allLetters.length;
+  const upperCount = uppercaseLetters.length;
+  const uppercaseRatio = totalLetters > 0 ? upperCount / totalLetters : 0;
+
+  const triggered =
+    totalLetters >= 5 &&
+    (
+      uppercaseRatio >= CONFIG.personality.capslock.uppercaseRatioThreshold ||
+      capsWordsCount >= CONFIG.personality.capslock.minCapsWords ||
+      hasLongCapsWord
+    );
+
   return {
-    lettersCount: letters.length,
-    uppercaseRatio: uppercaseLetters.length / letters.length,
+    totalLetters,
+    uppercaseLetters: upperCount,
+    uppercaseRatio,
+    capsWordsCount,
+    hasLongCapsWord,
+    triggered,
   };
 }
 
-function shouldHandleCapslock(message) {
-  if (!CONFIG.capslock.enabled) return false;
-  if (!message || !message.author || message.author.bot) return false;
-  if (message.channel.id !== CONFIG.channels.capslock) return false;
+function detectBadLanguageLevel(content) {
+  const lower = normalizeText(content);
 
-  const content = (message.content || '').trim();
-  if (!content || content.length < CONFIG.capslock.minLength) return false;
-  if (content.startsWith('!') || content.startsWith('/') || content.startsWith('.')) return false;
-  if (/https?:\/\//i.test(content)) return false;
+  const strongMatch = CONFIG.personality.badLanguage.strongWords.find((term) =>
+    messageContainsTerm(lower, term)
+  );
+  if (strongMatch) {
+    return { level: 'strong', matched: strongMatch };
+  }
 
-  const { lettersCount, uppercaseRatio } = analyzeUppercaseRatio(content);
-  if (lettersCount < 5) return false;
-  if (uppercaseRatio < CONFIG.capslock.uppercaseRatioThreshold) return false;
+  const mildMatch = CONFIG.personality.badLanguage.mildWords.find((term) =>
+    messageContainsTerm(lower, term)
+  );
+  if (mildMatch) {
+    return { level: 'mild', matched: mildMatch };
+  }
 
-  const now = Date.now();
-  const userLastReply = capslockUserCooldowns.get(message.author.id) || 0;
-
-  if (now - userLastReply < CONFIG.capslock.userCooldownMs) return false;
-  if (now - lastGlobalCapslockReplyAt < CONFIG.capslock.globalCooldownMs) return false;
-
-  return true;
+  return null;
 }
 
 async function detectKick(guild, memberId) {
@@ -555,8 +757,7 @@ function queueRoleAnnouncement(guildId, userId) {
 
       const mentions = ids.map((id) => `<@${id}>`).join(' ');
       const variant = pickRandom(CONFIG.roleAnnouncement.variants);
-      const description =
-        ids.length === 1 ? variant.single(mentions) : variant.multi(mentions);
+      const description = ids.length === 1 ? variant.single(mentions) : variant.multi(mentions);
 
       const embed = buildEmbed(variant.title, description);
       await safeSend(CONFIG.channels.announcements, { embeds: [embed] });
@@ -566,19 +767,6 @@ function queueRoleAnnouncement(guildId, userId) {
   }, CONFIG.roleAnnouncement.batchWindowMs);
 
   roleAnnouncementTimers.set(guildId, timer);
-}
-
-function getTomorrowEventDayNumber(now = new Date()) {
-  return (now.getDay() + 1) % 7;
-}
-
-function getTodayKey(now = new Date()) {
-  return now.toISOString().slice(0, 10);
-}
-
-function extractUniqueMentions(content) {
-  const matches = content.match(/<@!?\d+>/g) || [];
-  return [...new Set(matches)];
 }
 
 async function fetchLatestRelevantLocoVoteStatusMessage(channel) {
@@ -666,13 +854,120 @@ async function processPollReminderCheck() {
   console.log(`Poll reminder sent in channel ${channelId}`);
 }
 
+function isReplyToBotMessage(message) {
+  const referenced = message.reference?.messageId;
+  if (!referenced) return false;
+
+  return true;
+}
+
+async function tryHandleSpecialUserPersonality(message) {
+  const cfg = CONFIG.personality.specialUser;
+
+  if (!cfg.enabled) return false;
+  if (message.author.id !== cfg.triggerUserId) return false;
+  if (message.channel.id !== cfg.channelId) return false;
+  if (!canUsePersonalityReply(message.author.id)) return false;
+
+  const activeConversation = activeSpecialConversations.get(message.author.id);
+
+  if (activeConversation) {
+    const isDirectReplyToBot = message.reference?.messageId === activeConversation.lastBotMessageId;
+
+    if (isDirectReplyToBot && activeConversation.followUpsUsed < cfg.followUpMaxReplies) {
+      const replyText = pickRandom(cfg.followUpReplies);
+      const sent = await message.reply({
+        content: replyText,
+        allowedMentions: { repliedUser: true },
+      });
+
+      if (sent) {
+        activeConversation.lastBotMessageId = sent.id;
+        activeConversation.followUpsUsed += 1;
+        activeConversation.updatedAt = Date.now();
+        markPersonalityReplyUsed(message.author.id);
+        return true;
+      }
+    }
+  }
+
+  const dailyState = getSpecialUserState();
+  if (dailyState.newConversationsStarted >= cfg.dailyConversationLimit) {
+    return false;
+  }
+
+  const shouldStart = Math.random() < cfg.randomResponseChance;
+  if (!shouldStart) return false;
+
+  const replyText = pickRandom(cfg.openerReplies);
+  const sent = await message.reply({
+    content: replyText,
+    allowedMentions: { repliedUser: true },
+  });
+
+  if (!sent) return false;
+
+  dailyState.newConversationsStarted += 1;
+  activeSpecialConversations.set(message.author.id, {
+    lastBotMessageId: sent.id,
+    followUpsUsed: 0,
+    updatedAt: Date.now(),
+  });
+
+  markPersonalityReplyUsed(message.author.id);
+  return true;
+}
+
+async function tryHandleCapslockReaction(message) {
+  if (!CONFIG.personality.capslock.enabled) return false;
+  if (!canUsePersonalityReply(message.author.id)) return false;
+
+  const analysis = analyzeCapsPattern(message.content || '');
+  if (!analysis.triggered) return false;
+
+  const reply = pickRandom(CONFIG.personality.capslock.replies);
+  const sent = await message.reply({
+    content: reply,
+    allowedMentions: { repliedUser: true },
+  });
+
+  if (!sent) return false;
+
+  markPersonalityReplyUsed(message.author.id);
+  return true;
+}
+
+async function tryHandleBadLanguageReaction(message) {
+  if (!CONFIG.personality.badLanguage.enabled) return false;
+  if (!canUsePersonalityReply(message.author.id)) return false;
+
+  const detection = detectBadLanguageLevel(message.content || '');
+  if (!detection) return false;
+
+  const replies =
+    detection.level === 'strong'
+      ? CONFIG.personality.badLanguage.strongReplies
+      : CONFIG.personality.badLanguage.mildReplies;
+
+  const reply = pickRandom(replies);
+  const sent = await message.reply({
+    content: reply,
+    allowedMentions: { repliedUser: true },
+  });
+
+  if (!sent) return false;
+
+  markPersonalityReplyUsed(message.author.id);
+  return true;
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`✅ ${readyClient.user.tag} ist online.`);
   console.log(`🌍 TZ: ${process.env.TZ || 'not set'}`);
   console.log(`📌 Welcome Channel: ${CONFIG.channels.welcome}`);
   console.log(`📌 Goodbye Channel: ${CONFIG.channels.goodbye}`);
   console.log(`📌 Announcement Channel: ${CONFIG.channels.announcements}`);
-  console.log(`📌 Capslock Channel: ${CONFIG.channels.capslock}`);
+  console.log(`📌 Personality Channel: ${CONFIG.channels.personality}`);
 
   setInterval(processPollReminderCheck, CONFIG.pollReminder.checkIntervalMs);
 });
@@ -735,22 +1030,16 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 });
 
 client.on(Events.MessageCreate, async (message) => {
-  if (!shouldHandleCapslock(message)) return;
+  if (!shouldHandlePersonalityChannel(message)) return;
 
-  const reply = pickRandom(CONFIG.capslock.replies);
-  const now = Date.now();
+  const handledSpecial = await tryHandleSpecialUserPersonality(message);
+  if (handledSpecial) return;
 
-  capslockUserCooldowns.set(message.author.id, now);
-  lastGlobalCapslockReplyAt = now;
+  const handledCaps = await tryHandleCapslockReaction(message);
+  if (handledCaps) return;
 
-  try {
-    await message.reply({
-      content: reply,
-      allowedMentions: { repliedUser: true },
-    });
-  } catch (error) {
-    console.error('Capslock reply failed:', error.message);
-  }
+  const handledLanguage = await tryHandleBadLanguageReaction(message);
+  if (handledLanguage) return;
 });
 
 client.login(process.env.DISCORD_TOKEN);
