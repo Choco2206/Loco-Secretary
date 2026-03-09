@@ -1,13 +1,13 @@
 {
   "name": "loco-secretary",
   "version": "1.0.0",
-  "description": "",
+  "description": "Loco Squad Discord Secretary Bot",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Loco Squad",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
