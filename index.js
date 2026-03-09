@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const {
   Client,
   GatewayIntentBits,
@@ -8,9 +9,14 @@ const {
   EmbedBuilder,
 } = require('discord.js');
 
+const keywords = require('./data/keywords.json');
+const roleAnnouncementData = require('./data/roleAnnouncement.json');
+const specialUsersData = require('./data/specialUsers.json');
+const weeklyFlirty = require('./data/weeklyFlirty.json');
+const weeklyEdgy = require('./data/weeklyEdgy.json');
+
 const CONFIG = {
   locoVoteBotId: '1478770226651992134',
-  specialUserId: '426401816037687296',
 
   channels: {
     welcome: '1426178803960516742',
@@ -31,6 +37,16 @@ const CONFIG = {
 
   roles: {
     locoSquad: '1426495393742454834',
+    positions: {
+      TW: '1439254788322623598',
+      IV: '1439254755007529073',
+      ZDM: '1439254691547713649',
+      LM: '1439254617681825973',
+      RM: '1439254653949710367',
+      ZOM: '1439254585276502169',
+      LS: '1439254396587479040',
+      RS: '1439254478011367514',
+    },
   },
 
   branding: {
@@ -154,160 +170,7 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
   roleAnnouncement: {
     enabled: true,
     batchWindowMs: 10_000,
-    variants: [
-      {
-        title: '🐺 Ein neuer Loco im Rudel',
-        single: (mentions) => `Also gut… jetzt ist es offiziell.
-
-${mentions} gehört ab jetzt fest zu **LOCO SQUAD**. 🔴⚫
-
-Ein weiterer Spieler für unser leicht chaotisches Rudel.  
-Also nehmt ihn gut auf und zeigt ihm kurz, wie die Dinge hier laufen.
-
-Bei uns gilt:  
-ein bisschen verrückt  
-ein bisschen ehrgeizig  
-aber immer **Rudel über alles.** 🐺
-
-Willkommen im Team, ${mentions}. 💋`,
-        multi: (mentions) => `Also gut… jetzt ist es offiziell.
-
-${mentions} gehören ab jetzt fest zu **LOCO SQUAD**. 🔴⚫
-
-Neue Spieler für unser leicht chaotisches Rudel.  
-Also nehmt sie gut auf und zeigt ihnen kurz, wie die Dinge hier laufen.
-
-Bei uns gilt:  
-ein bisschen verrückt  
-ein bisschen ehrgeizig  
-aber immer **Rudel über alles.** 🐺
-
-Willkommen im Team, cuties. 💋`,
-      },
-      {
-        title: '🐺 Looks like we have a new Loco…',
-        single: (mentions) => `Na schau mal einer an.
-
-${mentions} ist jetzt offiziell Teil von **LOCO SQUAD**. 🔴⚫
-
-Das bedeutet:  
-Ein weiterer Spieler für unser schönes kleines Rudel.
-
-Also zeigt ihm kurz wie der Laden hier läuft  
-und nehmt ihn gut auf.
-
-Schön, dass du da bist, ${mentions}. 😏`,
-        multi: (mentions) => `Na schau mal einer an.
-
-${mentions} sind jetzt offiziell Teil von **LOCO SQUAD**. 🔴⚫
-
-Das bedeutet:  
-Neue Spieler für unser schönes kleines Rudel.
-
-Also zeigt ihnen kurz wie der Laden hier läuft  
-und nehmt sie gut auf.
-
-Schön, dass ihr da seid. 😏`,
-      },
-      {
-        title: '🐺 Official Loco Squad Member',
-        single: (mentions) => `Die Entscheidung ist gefallen.
-
-${mentions} gehört jetzt offiziell zum Loco Squad. 🔴⚫
-
-Ab jetzt heißt das:  
-Teamgeist  
-Präsenz  
-und ein bisschen **Loco-Wahnsinn**.
-
-Rudel — nehmt ihn gut auf.
-
-Willkommen im Team, ${mentions}. 💋`,
-        multi: (mentions) => `Die Entscheidung ist gefallen.
-
-${mentions} gehören jetzt offiziell zum Loco Squad. 🔴⚫
-
-Ab jetzt heißt das:  
-Teamgeist  
-Präsenz  
-und ein bisschen **Loco-Wahnsinn**.
-
-Rudel — nehmt sie gut auf.
-
-Willkommen im Team, cuties. 💋`,
-      },
-      {
-        title: '🐺 Das Rudel wächst',
-        single: (mentions) => `Na sowas… das Rudel ist gerade ein bisschen größer geworden.
-
-${mentions} ist jetzt offizieller Teil von **LOCO SQUAD**. 🔴⚫
-
-Also zeigt ihm kurz, wie die Dinge hier laufen  
-und sorgt dafür, dass er schnell versteht,  
-was **Loco Mentalität** bedeutet.
-
-Willkommen im Rudel, ${mentions}. 🐺`,
-        multi: (mentions) => `Na sowas… das Rudel ist gerade ein bisschen größer geworden.
-
-${mentions} sind jetzt offizieller Teil von **LOCO SQUAD**. 🔴⚫
-
-Also zeigt ihnen kurz, wie die Dinge hier laufen  
-und sorgt dafür, dass sie schnell verstehen,  
-was **Loco Mentalität** bedeutet.
-
-Willkommen im Rudel, cuties. 🐺`,
-      },
-      {
-        title: '🐺 Pack Update',
-        single: (mentions) => `Das Rudel hat Zuwachs bekommen.
-
-${mentions} gehört jetzt offiziell zu **LOCO SQUAD**. 🔴⚫
-
-Also seid lieb, zeigt ihm kurz die wichtigsten Dinge  
-und sorgt dafür, dass er sich schnell einlebt.
-
-Bei uns wird zusammen gespielt  
-zusammen gewonnen  
-und manchmal auch zusammen leicht verrückt. 😏
-
-Willkommen im Team, ${mentions}.`,
-        multi: (mentions) => `Das Rudel hat Zuwachs bekommen.
-
-${mentions} gehören jetzt offiziell zu **LOCO SQUAD**. 🔴⚫
-
-Also seid lieb, zeigt ihnen kurz die wichtigsten Dinge  
-und sorgt dafür, dass sie sich schnell einleben.
-
-Bei uns wird zusammen gespielt  
-zusammen gewonnen  
-und manchmal auch zusammen leicht verrückt. 😏
-
-Willkommen im Team, cuties.`,
-      },
-      {
-        title: '🐺 Another Loco joins the pack',
-        single: (mentions) => `So… jetzt ist es offiziell.
-
-${mentions} ist ab sofort Teil von **LOCO SQUAD**. 🔴⚫
-
-Ein weiterer Spieler für unser schönes Chaos.
-
-Rudel — nehmt ihn gut auf  
-und zeigt ihm, warum man bei Loco nie lange normal bleibt. 🐺
-
-Willkommen im Team, ${mentions}. 💋`,
-        multi: (mentions) => `So… jetzt ist es offiziell.
-
-${mentions} sind ab sofort Teil von **LOCO SQUAD**. 🔴⚫
-
-Neue Spieler für unser schönes Chaos.
-
-Rudel — nehmt sie gut auf  
-und zeigt ihnen, warum man bei Loco nie lange normal bleibt. 🐺
-
-Willkommen im Team, cuties. 💋`,
-      },
-    ],
+    maxShownPositions: 3,
   },
 
   personality: {
@@ -405,41 +268,16 @@ Willkommen im Team, cuties. 💋`,
         'Einmal tief durchatmen und dann bitte mit etwas mehr Stil nochmal.',
       ],
     },
+  },
 
-    specialUser: {
-      enabled: true,
-      triggerUserId: '426401816037687296',
-      channelId: '1426178916455944242',
-      dailyConversationLimit: 5,
-      randomResponseChance: 0.4,
-      followUpMaxReplies: 3,
-
-      openerReplies: [
-        'Na schau mal einer an… du schon wieder. 😏',
-        'Kaum schreibst du was, muss ich natürlich wieder hinschauen. 💋',
-        'Ach, mein Lieblings-Stressfaktor ist wieder da. Cute. 🐺',
-        'Du tippst, ich lese. Leider viel zu aufmerksam. 😘',
-        'Na Süßer, was ist heute wieder dein Problem?',
-        'Ich wusste doch, dass du heute noch auftauchst.',
-        'Na, mein kleiner Chaoslieferant ist wieder online. 😏',
-        'Du schon wieder? Interessant, wie oft du heute meine Aufmerksamkeit willst. 💋',
-        'Kaum wird’s ruhig, tauchst du natürlich wieder auf.',
-        'Sag bloß, du hast mich vermisst. 😘',
-      ],
-
-      followUpReplies: [
-        'Mhm… jetzt hör ich dir leider schon wieder zu. 💋',
-        'Du gibst aber auch wirklich nicht so schnell Ruhe, hm? 😏',
-        'Interessant. Erzähl weiter, Süßer.',
-        'Na los, was kommt jetzt noch? Ich bin gespannt.',
-        'Ich merk schon… ohne mich wird dir schnell langweilig. 💅',
-        'Du magst meine Aufmerksamkeit wohl wirklich sehr, hm?',
-        'Du schreibst, ich antworte. Irgendwie läuft das erschreckend gut zwischen uns. 😘',
-        'Na komm, jetzt bist du schon drin im Gespräch. Dann zieh auch durch.',
-        'Ich höre zu. Mehr oder weniger freiwillig. 😏',
-        'So, und jetzt sag mir noch, was du eigentlich willst, cutie.',
-      ],
-    },
+  weeklyPings: {
+    enabled: true,
+    checkIntervalMs: 60 * 60 * 1000,
+    minHour: 18,
+    maxHour: 23,
+    minDaysBetweenPings: 2,
+    minWeeklyPings: 1,
+    maxWeeklyPings: 2,
   },
 
   pollReminder: {
@@ -552,9 +390,14 @@ let lastGlobalPersonalityReplyAt = 0;
 const specialUserDailyState = new Map();
 const activeSpecialConversations = new Map();
 
+const weeklyPingState = new Map();
 function getChannel(channelId) {
   if (!channelId) return null;
   return client.channels.cache.get(channelId) ?? null;
+}
+
+function pickRandom(array) {
+  return array[Math.floor(Math.random() * array.length)];
 }
 
 function buildEmbed(title, description) {
@@ -566,23 +409,27 @@ function buildEmbed(title, description) {
     .setTimestamp();
 }
 
-async function safeSend(channelId, payload) {
+async function safeSend(channelId, payload, label = 'unknown') {
   try {
     const channel = getChannel(channelId);
     if (!channel || !channel.isTextBased()) return null;
     return await channel.send(payload);
   } catch (error) {
-    console.error('Send error:', error.message);
+    console.error(`[${label}] Send error:`, error.message);
     return null;
   }
 }
 
-function pickRandom(array) {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
 function getTodayKey(now = new Date()) {
   return now.toISOString().slice(0, 10);
+}
+
+function getWeekKey(now = new Date()) {
+  const year = now.getUTCFullYear();
+  const oneJan = new Date(Date.UTC(year, 0, 1));
+  const dayOfYear = Math.floor((now - oneJan) / 86400000) + 1;
+  const week = Math.ceil(dayOfYear / 7);
+  return `${year}-W${week}`;
 }
 
 function getTomorrowEventDayNumber(now = new Date()) {
@@ -590,11 +437,7 @@ function getTomorrowEventDayNumber(now = new Date()) {
 }
 
 function normalizeText(text) {
-  return (text || '').toLowerCase();
-}
-
-function messageContainsTerm(contentLower, term) {
-  return contentLower.includes(term.toLowerCase());
+  return (text || '').toLowerCase().trim();
 }
 
 function extractUniqueMentions(content) {
@@ -618,9 +461,13 @@ function markPersonalityReplyUsed(userId) {
   lastGlobalPersonalityReplyAt = now;
 }
 
-function getSpecialUserState() {
+function getSpecialUserProfile(userId) {
+  return Object.values(specialUsersData).find((entry) => entry.userId === userId) || null;
+}
+
+function getSpecialUserDailyState(userId) {
   const today = getTodayKey();
-  const existing = specialUserDailyState.get(CONFIG.specialUserId);
+  const existing = specialUserDailyState.get(userId);
 
   if (existing && existing.dateKey === today) return existing;
 
@@ -629,15 +476,101 @@ function getSpecialUserState() {
     newConversationsStarted: 0,
   };
 
-  specialUserDailyState.set(CONFIG.specialUserId, fresh);
+  specialUserDailyState.set(userId, fresh);
   return fresh;
 }
 
-function shouldHandlePersonalityChannel(message) {
-  if (!CONFIG.personality.enabled) return false;
-  if (!message || !message.author || message.author.bot) return false;
-  if (message.channel.id !== CONFIG.channels.personality) return false;
-  return true;
+function getWeeklyPingEntry(userId) {
+  const weekKey = getWeekKey();
+  const existing = weeklyPingState.get(userId);
+
+  if (existing && existing.weekKey === weekKey) return existing;
+
+  const targetCount =
+    Math.random() < 0.5
+      ? CONFIG.weeklyPings.minWeeklyPings
+      : CONFIG.weeklyPings.maxWeeklyPings;
+
+  const fresh = {
+    weekKey,
+    sentCount: 0,
+    targetCount,
+    lastPingAt: 0,
+  };
+
+  weeklyPingState.set(userId, fresh);
+  return fresh;
+}
+
+function isInsideWeeklyPingTimeWindow(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= CONFIG.weeklyPings.minHour && hour <= CONFIG.weeklyPings.maxHour;
+}
+
+function daysBetweenTimestamps(a, b) {
+  return Math.floor(Math.abs(a - b) / 86400000);
+}
+
+function getMemberPositionKeys(member) {
+  const positions = [];
+
+  for (const [key, roleId] of Object.entries(CONFIG.roles.positions)) {
+    if (member.roles.cache.has(roleId)) {
+      positions.push(key);
+    }
+  }
+
+  return positions.slice(0, CONFIG.roleAnnouncement.maxShownPositions);
+}
+
+function buildRolePositionText(positionKeys) {
+  if (!positionKeys || positionKeys.length === 0) {
+    return 'Mit seinem Join bekommt unser Rudel weitere Tiefe und neue Möglichkeiten für den Kader.';
+  }
+
+  const snippets = positionKeys
+    .map((key) => roleAnnouncementData.positions[key])
+    .filter(Boolean)
+    .map((arr) => pickRandom(arr));
+
+  if (snippets.length === 1) return snippets[0];
+  if (snippets.length === 2) return `${snippets[0]} ${snippets[1]}`;
+
+  return `${snippets[0]} ${snippets[1]} ${snippets[2]}`;
+}
+
+function buildRoleAnnouncementEmbed(member) {
+  const positions = getMemberPositionKeys(member);
+  const mention = `${member}`;
+  const title = pickRandom(roleAnnouncementData.titles);
+  const intro = pickRandom(roleAnnouncementData.intros);
+  const hype = pickRandom(roleAnnouncementData.hype);
+  const ending = pickRandom(roleAnnouncementData.endings);
+  const positionLine = positions.length > 0 ? `**Positionen:** ${positions.join(' / ')}` : null;
+  const positionText = buildRolePositionText(positions);
+
+  const description = [
+    intro,
+    '',
+    `${mention} gehört ab sofort offiziell zu **LOCO SQUAD** 🔴⚫`,
+    '',
+    hype,
+    '',
+    positionLine,
+    positionText,
+    '',
+    ending,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return new EmbedBuilder()
+    .setColor(CONFIG.branding.accentColor)
+    .setTitle(title)
+    .setDescription(description)
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: CONFIG.branding.footer })
+    .setTimestamp();
 }
 
 function analyzeCapsPattern(text) {
@@ -645,7 +578,6 @@ function analyzeCapsPattern(text) {
   if (!trimmed || trimmed.length < CONFIG.personality.capslock.minTextLength) {
     return {
       totalLetters: 0,
-      uppercaseLetters: 0,
       uppercaseRatio: 0,
       capsWordsCount: 0,
       hasLongCapsWord: false,
@@ -655,8 +587,8 @@ function analyzeCapsPattern(text) {
 
   const allLetters = trimmed.match(/[A-Za-zÄÖÜäöüß]/g) || [];
   const uppercaseLetters = trimmed.match(/[A-ZÄÖÜ]/g) || [];
-
   const words = trimmed.split(/\s+/).filter(Boolean);
+
   let capsWordsCount = 0;
   let hasLongCapsWord = false;
 
@@ -664,37 +596,31 @@ function analyzeCapsPattern(text) {
     const cleaned = word.replace(/[^A-Za-zÄÖÜäöüß]/g, '');
     if (!cleaned) continue;
 
-    const hasLetter = /[A-Za-zÄÖÜäöüß]/.test(cleaned);
-    const fullyUpper = cleaned === cleaned.toUpperCase() && cleaned !== cleaned.toLowerCase();
+    const fullyUpper =
+      cleaned === cleaned.toUpperCase() &&
+      cleaned !== cleaned.toLowerCase();
 
-    if (hasLetter && fullyUpper && cleaned.length >= 2) {
-      capsWordsCount += 1;
-    }
-
-    if (hasLetter && fullyUpper && cleaned.length >= CONFIG.personality.capslock.longCapsWordLength) {
+    if (fullyUpper && cleaned.length >= 2) capsWordsCount += 1;
+    if (fullyUpper && cleaned.length >= CONFIG.personality.capslock.longCapsWordLength) {
       hasLongCapsWord = true;
     }
   }
 
   const totalLetters = allLetters.length;
-  const upperCount = uppercaseLetters.length;
-  const uppercaseRatio = totalLetters > 0 ? upperCount / totalLetters : 0;
-
-  const triggered =
-    totalLetters >= 5 &&
-    (
-      uppercaseRatio >= CONFIG.personality.capslock.uppercaseRatioThreshold ||
-      capsWordsCount >= CONFIG.personality.capslock.minCapsWords ||
-      hasLongCapsWord
-    );
+  const uppercaseRatio = totalLetters > 0 ? uppercaseLetters.length / totalLetters : 0;
 
   return {
     totalLetters,
-    uppercaseLetters: upperCount,
     uppercaseRatio,
     capsWordsCount,
     hasLongCapsWord,
-    triggered,
+    triggered:
+      totalLetters >= 5 &&
+      (
+        uppercaseRatio >= CONFIG.personality.capslock.uppercaseRatioThreshold ||
+        capsWordsCount >= CONFIG.personality.capslock.minCapsWords ||
+        hasLongCapsWord
+      ),
   };
 }
 
@@ -702,22 +628,39 @@ function detectBadLanguageLevel(content) {
   const lower = normalizeText(content);
 
   const strongMatch = CONFIG.personality.badLanguage.strongWords.find((term) =>
-    messageContainsTerm(lower, term)
+    lower.includes(term)
   );
-  if (strongMatch) {
-    return { level: 'strong', matched: strongMatch };
-  }
+  if (strongMatch) return { level: 'strong', matched: strongMatch };
 
   const mildMatch = CONFIG.personality.badLanguage.mildWords.find((term) =>
-    messageContainsTerm(lower, term)
+    lower.includes(term)
   );
-  if (mildMatch) {
-    return { level: 'mild', matched: mildMatch };
+  if (mildMatch) return { level: 'mild', matched: mildMatch };
+
+  return null;
+}
+
+function detectKeywordCategory(content) {
+  const lower = normalizeText(content);
+
+  for (const [categoryKey, categoryData] of Object.entries(keywords)) {
+    const found = categoryData.words.find((word) => lower.includes(word));
+    if (found) {
+      return {
+        categoryKey,
+        matchedWord: found,
+        responses: categoryData.responses,
+      };
+    }
   }
 
   return null;
 }
 
+function getStyleReplySet(style, keywordMatch) {
+  if (!keywordMatch || !keywordMatch.responses) return null;
+  return keywordMatch.responses[style] || null;
+}
 async function detectKick(guild, memberId) {
   try {
     const audit = await guild.fetchAuditLogs({
@@ -733,12 +676,14 @@ async function detectKick(guild, memberId) {
 
     return entry || null;
   } catch (error) {
-    console.error('Kick audit log read failed:', error.message);
+    console.error('[detectKick] Audit log read failed:', error.message);
     return null;
   }
 }
 
-function queueRoleAnnouncement(guildId, userId) {
+function queueRoleAnnouncement(guild, userId) {
+  const guildId = guild.id;
+
   if (!pendingRoleAnnouncements.has(guildId)) {
     pendingRoleAnnouncements.set(guildId, new Set());
   }
@@ -755,14 +700,70 @@ function queueRoleAnnouncement(guildId, userId) {
 
       if (ids.length === 0) return;
 
-      const mentions = ids.map((id) => `<@${id}>`).join(' ');
-      const variant = pickRandom(CONFIG.roleAnnouncement.variants);
-      const description = ids.length === 1 ? variant.single(mentions) : variant.multi(mentions);
+      const members = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            return await guild.members.fetch(id);
+          } catch {
+            return null;
+          }
+        })
+      );
 
-      const embed = buildEmbed(variant.title, description);
-      await safeSend(CONFIG.channels.announcements, { embeds: [embed] });
+      const validMembers = members.filter(Boolean);
+      if (validMembers.length === 0) return;
+
+      if (validMembers.length === 1) {
+        const embed = buildRoleAnnouncementEmbed(validMembers[0]);
+        await safeSend(
+          CONFIG.channels.announcements,
+          { embeds: [embed] },
+          'roleAnnouncement-single'
+        );
+        return;
+      }
+
+      const title = pickRandom(roleAnnouncementData.titles);
+      const intro = pickRandom(roleAnnouncementData.intros);
+      const hype = pickRandom(roleAnnouncementData.hype);
+      const ending = pickRandom(roleAnnouncementData.endings);
+
+      const mentions = validMembers.map((m) => `${m}`).join(' ');
+
+      const allPositions = validMembers.flatMap((member) => getMemberPositionKeys(member));
+      const uniquePositions = [...new Set(allPositions)].slice(0, CONFIG.roleAnnouncement.maxShownPositions);
+
+      const positionLine =
+        uniquePositions.length > 0
+          ? `**Positionen im neuen Batch:** ${uniquePositions.join(' / ')}`
+          : null;
+
+      const description = [
+        intro,
+        '',
+        `${mentions}`,
+        '',
+        `gehören ab sofort offiziell zu **LOCO SQUAD** 🔴⚫`,
+        '',
+        hype,
+        '',
+        positionLine,
+        'Das Rudel wächst weiter — mehr Tiefe, mehr Optionen und mehr Möglichkeiten für das, was wir hier gemeinsam aufbauen.',
+        '',
+        ending,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const embed = buildEmbed(title, description);
+
+      await safeSend(
+        CONFIG.channels.announcements,
+        { embeds: [embed] },
+        'roleAnnouncement-batch'
+      );
     } catch (error) {
-      console.error('Role announcement batch failed:', error.message);
+      console.error('[queueRoleAnnouncement] Batch failed:', error.message);
     }
   }, CONFIG.roleAnnouncement.batchWindowMs);
 
@@ -771,7 +772,10 @@ function queueRoleAnnouncement(guildId, userId) {
 
 async function fetchLatestRelevantLocoVoteStatusMessage(channel) {
   try {
-    const fetched = await channel.messages.fetch({ limit: CONFIG.pollReminder.maxMessageScan });
+    const fetched = await channel.messages.fetch({
+      limit: CONFIG.pollReminder.maxMessageScan,
+    });
+
     const maxAgeMs = CONFIG.pollReminder.maxRelevantMessageAgeDays * 24 * 60 * 60 * 1000;
     const now = Date.now();
 
@@ -790,7 +794,7 @@ async function fetchLatestRelevantLocoVoteStatusMessage(channel) {
 
     return relevantMessages[0] || null;
   } catch (error) {
-    console.error('Fetch relevant Loco Vote message failed:', error.message);
+    console.error('[fetchLatestRelevantLocoVoteStatusMessage] Failed:', error.message);
     return null;
   }
 }
@@ -815,7 +819,7 @@ async function processPollReminderCheck() {
 
   const channel = getChannel(channelId);
   if (!channel || !channel.isTextBased()) {
-    console.error(`Poll reminder channel not found or not text-based: ${channelId}`);
+    console.error(`[processPollReminderCheck] Poll channel missing: ${channelId}`);
     sentPollReminderKeys.add(reminderKey);
     return;
   }
@@ -824,25 +828,25 @@ async function processPollReminderCheck() {
   sentPollReminderKeys.add(reminderKey);
 
   if (!statusMessage) {
-    console.log(`No relevant Loco Vote status message found in channel ${channelId}`);
+    console.log(`[pollReminder] No relevant Loco Vote status message found in ${channelId}`);
     return;
   }
 
   const content = statusMessage.content || '';
 
   if (content.includes(CONFIG.pollReminder.statusAllDone)) {
-    console.log(`All players voted in channel ${channelId}. No reminder sent.`);
+    console.log(`[pollReminder] All players voted in ${channelId}`);
     return;
   }
 
   if (!content.includes(CONFIG.pollReminder.statusNeedVote)) {
-    console.log(`No pending-vote status found in channel ${channelId}.`);
+    console.log(`[pollReminder] No pending-vote status found in ${channelId}`);
     return;
   }
 
   const mentions = extractUniqueMentions(content);
   if (mentions.length === 0) {
-    console.log(`Pending-vote status found but no mentions extracted in channel ${channelId}.`);
+    console.log(`[pollReminder] Pending-vote message found but no mentions in ${channelId}`);
     return;
   }
 
@@ -850,32 +854,87 @@ async function processPollReminderCheck() {
     mentions: mentions.join(' '),
   });
 
-  await safeSend(channelId, { content: reminderText });
-  console.log(`Poll reminder sent in channel ${channelId}`);
+  await safeSend(
+    channelId,
+    { content: reminderText },
+    'pollReminder'
+  );
+
+  console.log(`[pollReminder] Reminder sent in ${channelId}`);
 }
 
-function isReplyToBotMessage(message) {
-  const referenced = message.reference?.messageId;
-  if (!referenced) return false;
+async function processWeeklyPings() {
+  if (!CONFIG.weeklyPings.enabled) return;
 
+  const now = new Date();
+  if (!isInsideWeeklyPingTimeWindow(now)) return;
+
+  const flirtyProfile = specialUsersData.flirty;
+  const edgyProfile = specialUsersData.edgy;
+
+  const candidates = [
+    {
+      profile: flirtyProfile,
+      messages: weeklyFlirty,
+      label: 'weeklyFlirty',
+    },
+    {
+      profile: edgyProfile,
+      messages: weeklyEdgy,
+      label: 'weeklyEdgy',
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const state = getWeeklyPingEntry(candidate.profile.userId);
+
+    if (state.sentCount >= state.targetCount) continue;
+
+    if (state.lastPingAt) {
+      const diffDays = daysBetweenTimestamps(Date.now(), state.lastPingAt);
+      if (diffDays < CONFIG.weeklyPings.minDaysBetweenPings) continue;
+    }
+
+    const randomRoll = Math.random();
+    if (randomRoll > 0.35) continue;
+
+    const messageText = pickRandom(candidate.messages);
+
+    const sent = await safeSend(
+      candidate.profile.channelId,
+      { content: messageText },
+      candidate.label
+    );
+
+    if (!sent) continue;
+
+    state.sentCount += 1;
+    state.lastPingAt = Date.now();
+
+    console.log(`[${candidate.label}] Weekly ping sent to ${candidate.profile.userId}`);
+  }
+}
+function shouldHandlePersonalityChannel(message) {
+  if (!CONFIG.personality.enabled) return false;
+  if (!message || !message.author || message.author.bot) return false;
+  if (message.channel.id !== CONFIG.channels.personality) return false;
   return true;
 }
 
-async function tryHandleSpecialUserPersonality(message) {
-  const cfg = CONFIG.personality.specialUser;
-
-  if (!cfg.enabled) return false;
-  if (message.author.id !== cfg.triggerUserId) return false;
-  if (message.channel.id !== cfg.channelId) return false;
+async function tryHandleSpecialUserConversation(message) {
+  const profile = getSpecialUserProfile(message.author.id);
+  if (!profile) return false;
+  if (message.channel.id !== profile.channelId) return false;
   if (!canUsePersonalityReply(message.author.id)) return false;
 
   const activeConversation = activeSpecialConversations.get(message.author.id);
 
   if (activeConversation) {
-    const isDirectReplyToBot = message.reference?.messageId === activeConversation.lastBotMessageId;
+    const isDirectReplyToBot =
+      message.reference?.messageId === activeConversation.lastBotMessageId;
 
-    if (isDirectReplyToBot && activeConversation.followUpsUsed < cfg.followUpMaxReplies) {
-      const replyText = pickRandom(cfg.followUpReplies);
+    if (isDirectReplyToBot && activeConversation.followUpsUsed < profile.followUpMaxReplies) {
+      const replyText = pickRandom(profile.followUps);
       const sent = await message.reply({
         content: replyText,
         allowedMentions: { repliedUser: true },
@@ -891,15 +950,39 @@ async function tryHandleSpecialUserPersonality(message) {
     }
   }
 
-  const dailyState = getSpecialUserState();
-  if (dailyState.newConversationsStarted >= cfg.dailyConversationLimit) {
+  const dailyState = getSpecialUserDailyState(message.author.id);
+  if (dailyState.newConversationsStarted >= profile.dailyConversationLimit) {
     return false;
   }
 
-  const shouldStart = Math.random() < cfg.randomResponseChance;
+  const keywordMatch = detectKeywordCategory(message.content || '');
+  if (keywordMatch) {
+    const styleReplies = getStyleReplySet(profile.style, keywordMatch);
+
+    if (styleReplies && styleReplies.length > 0) {
+      const replyText = pickRandom(styleReplies);
+      const sent = await message.reply({
+        content: replyText,
+        allowedMentions: { repliedUser: true },
+      });
+
+      if (sent) {
+        dailyState.newConversationsStarted += 1;
+        activeSpecialConversations.set(message.author.id, {
+          lastBotMessageId: sent.id,
+          followUpsUsed: 0,
+          updatedAt: Date.now(),
+        });
+        markPersonalityReplyUsed(message.author.id);
+        return true;
+      }
+    }
+  }
+
+  const shouldStart = Math.random() < profile.randomResponseChance;
   if (!shouldStart) return false;
 
-  const replyText = pickRandom(cfg.openerReplies);
+  const replyText = pickRandom(profile.openers);
   const sent = await message.reply({
     content: replyText,
     allowedMentions: { repliedUser: true },
@@ -960,7 +1043,6 @@ async function tryHandleBadLanguageReaction(message) {
   markPersonalityReplyUsed(message.author.id);
   return true;
 }
-
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`✅ ${readyClient.user.tag} ist online.`);
   console.log(`🌍 TZ: ${process.env.TZ || 'not set'}`);
@@ -970,6 +1052,7 @@ client.once(Events.ClientReady, (readyClient) => {
   console.log(`📌 Personality Channel: ${CONFIG.channels.personality}`);
 
   setInterval(processPollReminderCheck, CONFIG.pollReminder.checkIntervalMs);
+  setInterval(processWeeklyPings, CONFIG.weeklyPings.checkIntervalMs);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -980,7 +1063,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
     CONFIG.welcome.description(member)
   );
 
-  await safeSend(CONFIG.channels.welcome, { embeds: [embed] });
+  await safeSend(
+    CONFIG.channels.welcome,
+    { embeds: [embed] },
+    'welcome'
+  );
 });
 
 client.on(Events.GuildBanAdd, async (ban) => {
@@ -993,7 +1080,11 @@ client.on(Events.GuildBanAdd, async (ban) => {
   const userText = `**${ban.user.tag}**`;
   const embed = buildEmbed(variant.title, variant.description(userText));
 
-  await safeSend(CONFIG.channels.goodbye, { embeds: [embed] });
+  await safeSend(
+    CONFIG.channels.goodbye,
+    { embeds: [embed] },
+    'ban'
+  );
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
@@ -1006,13 +1097,23 @@ client.on(Events.GuildMemberRemove, async (member) => {
   if (kickEntry) {
     const variant = pickRandom(CONFIG.goodbye.kickVariants);
     const embed = buildEmbed(variant.title, variant.description(userText));
-    await safeSend(CONFIG.channels.goodbye, { embeds: [embed] });
+
+    await safeSend(
+      CONFIG.channels.goodbye,
+      { embeds: [embed] },
+      'kick'
+    );
     return;
   }
 
   const variant = pickRandom(CONFIG.goodbye.leaveVariants);
   const embed = buildEmbed(variant.title, variant.description(userText));
-  await safeSend(CONFIG.channels.goodbye, { embeds: [embed] });
+
+  await safeSend(
+    CONFIG.channels.goodbye,
+    { embeds: [embed] },
+    'leave'
+  );
 });
 
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
@@ -1025,14 +1126,14 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   const hasRoleNow = newMember.roles.cache.has(roleId);
 
   if (!hadRoleBefore && hasRoleNow) {
-    queueRoleAnnouncement(newMember.guild.id, newMember.id);
+    queueRoleAnnouncement(newMember.guild, newMember.id);
   }
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (!shouldHandlePersonalityChannel(message)) return;
 
-  const handledSpecial = await tryHandleSpecialUserPersonality(message);
+  const handledSpecial = await tryHandleSpecialUserConversation(message);
   if (handledSpecial) return;
 
   const handledCaps = await tryHandleCapslockReaction(message);
