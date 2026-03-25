@@ -1,4 +1,6 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 
 const {
   Client,
@@ -11,6 +13,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  UserSelectMenuBuilder,
   MessageFlags,
 } = require('discord.js');
 
@@ -28,6 +31,15 @@ const POSITION_LABELS = {
   ST: 'ST',
 };
 
+const JERSEY_RANGES = [
+  { key: '1_24', label: '1 bis 24', min: 1, max: 24 },
+  { key: '25_49', label: '25 bis 49', min: 25, max: 49 },
+  { key: '50_74', label: '50 bis 74', min: 50, max: 74 },
+  { key: '75_99', label: '75 bis 99', min: 75, max: 99 },
+];
+
+const JERSEY_FILE = path.join(__dirname, 'data', 'jerseyNumbers.json');
+
 const CONFIG = {
   locoVoteBotId: '1478770226651992134',
   ownerUserId: '1425580097661833443',
@@ -37,16 +49,7 @@ const CONFIG = {
     goodbye: '1426178916455944242',
     announcements: '1426178139234631700',
     positions: '1439254263112011787',
-
-    pollsByEventDay: {
-      0: '1438857782442065960', // Sonntag
-      1: '1438857212775895083', // Montag
-      2: '1438857262151106672', // Dienstag
-      3: '1438857421022822431', // Mittwoch
-      4: '1438857532608086098', // Donnerstag
-      5: '1438857826431795222', // Freitag
-      6: '1438857699814019072', // Samstag
-    },
+    jerseys: '1446131615469146243',
   },
 
   roles: {
@@ -96,6 +99,7 @@ Und nur damit du direkt weißt, worauf du dich hier eingelassen hast, Süßer:
 **Bevor du loslegst:**
 
 → Wähle zuerst deine **Hauptposition + Nebenpositionen** in <#1439254263112011787>  
+→ Such dir deine **Trikotnummer** in <#1446131615469146243>  
 → Lies dir kurz <#1426178300522532935> durch  
 → Check regelmäßig <#1426178139234631700> für wichtige News  
 
@@ -207,90 +211,9 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
     title: '📍 Loco Positionen',
   },
 
-  pollReminder: {
+  jerseyPanel: {
     enabled: true,
-    checkIntervalMs: 60_000,
-    triggerHour: 19,
-    triggerMinute: 0,
-    triggerWindowMinutes: 10,
-    maxMessageScan: 200,
-    maxRelevantMessageAgeDays: 5,
-    statusNeedVote: '⚠️ Noch nicht abgestimmt:',
-    statusAllDone: '✅ Alle haben abgestimmt.',
-    variants: [
-      ({ mentions }) => `⚠️ **Noch nicht abgestimmt, hm?**
-
-${mentions}
-
-Ihr habt noch genau **1 Stunde**, bevor der Poll dichtmacht.  
-Und ja, langsam werde ich ein bisschen ungeduldig, Süße. 💋  
-Also bewegt euch bitte noch und stimmt endlich ab.`,
-      ({ mentions }) => `⚠️ **Secretary Reminder**
-
-${mentions}
-
-Der Poll endet in **1 Stunde**  
-und ihr habt es immer noch nicht geschafft abzustimmen?  
-Nicht so schön, Hübsche. 😏  
-Also los jetzt — ich will das nicht zweimal sagen müssen.`,
-      ({ mentions }) => `⚠️ **Na, wer fehlt denn da noch?**
-
-${mentions}
-
-Noch **1 Stunde Zeit**.  
-Und ich sehe ganz genau, wer hier noch fehlt. 💅  
-Also stimmt jetzt bitte endlich ab, bevor ich wirklich schlechte Laune bekomme.`,
-      ({ mentions }) => `⚠️ **Last reminder, cuties.**
-
-${mentions}
-
-Der Poll läuft nur noch **eine Stunde**.  
-Wäre wirklich süß von euch, wenn ihr jetzt endlich abstimmt  
-und meine Planung nicht weiter unnötig durcheinanderbringt. 💋`,
-      ({ mentions }) => `⚠️ **Ihr macht es mir heute aber schwer...**
-
-${mentions}
-
-Noch **1 Stunde bis Poll-Ende**  
-und ihr fehlt immer noch.  
-Seid bitte lieb, stimmt ab und bringt mich nicht dazu, sauer zu werden. 😘`,
-      ({ mentions }) => `⚠️ **Hello? Ich warte immer noch.**
-
-${mentions}
-
-Der Poll endet in **1 Stunde**  
-und ihr steht noch immer auf meiner kleinen Liste.  
-Also bitte jetzt abstimmen, Süße — ich mag Chaos nur, wenn es geplant ist. 😏`,
-      ({ mentions }) => `⚠️ **Nicht abstimmen ist keine gute Idee...**
-
-${mentions}
-
-Noch **1 Stunde** und dann ist Schluss.  
-Langsam wird’s auffällig, Hübsche.  
-Also einmal kurz voten — dann bin ich auch wieder lieb. 💋`,
-      ({ mentions }) => `⚠️ **Kleine Erinnerung von eurer Secretary**
-
-${mentions}
-
-Der Poll schließt in **1 Stunde**.  
-Und ganz ehrlich? Ich hätte das inzwischen schon von euch erwartet.  
-Also macht’s jetzt bitte noch schnell.`,
-      ({ mentions }) => `⚠️ **Noch immer offen auf meiner Liste...**
-
-${mentions}
-
-Ihr habt noch **1 Stunde**, um abzustimmen.  
-Also bitte nicht weiter trödeln — ich sehe sowas nämlich. 💅  
-Und glaub mir, ich merke mir alles.`,
-      ({ mentions }) => `⚠️ **Jetzt aber mal zügig, cuties.**
-
-${mentions}
-
-In **1 Stunde** ist der Poll vorbei.  
-Ihr fehlt noch  
-und ich fände es wirklich schade, wenn ich wegen euch genervt ins Abendprogramm gehe. 😘  
-Also abstimmen. Jetzt.`,
-    ],
+    title: '👕 Loco Trikotnummern',
   },
 };
 
@@ -308,7 +231,6 @@ const client = new Client({
 const recentBanIds = new Set();
 const pendingRoleAnnouncements = new Map();
 const roleAnnouncementTimers = new Map();
-const sentPollReminderKeys = new Set();
 
 function getChannel(channelId) {
   if (!channelId) return null;
@@ -337,14 +259,6 @@ async function safeSend(channelId, payload, label = 'unknown') {
     console.error(`[${label}] Send error:`, error.message);
     return null;
   }
-}
-
-function getTodayKey(now = new Date()) {
-  return now.toISOString().slice(0, 10);
-}
-
-function getTomorrowEventDayNumber(now = new Date()) {
-  return (now.getDay() + 1) % 7;
 }
 
 function extractUniqueMentions(content) {
@@ -484,6 +398,7 @@ function queueRoleAnnouncement(guild, userId) {
 
       const mentions = validMembers.map((m) => `${m}`).join(' ');
       const uniqueHPs = [...new Set(validMembers.map((member) => getMemberHPKey(member)).filter(Boolean))];
+
       const positionLine =
         uniqueHPs.length > 0
           ? `**Hauptpositionen im neuen Batch:** ${uniqueHPs.map((key) => POSITION_LABELS[key]).join(' / ')}`
@@ -519,115 +434,7 @@ function queueRoleAnnouncement(guild, userId) {
   roleAnnouncementTimers.set(guildId, timer);
 }
 
-async function fetchLatestRelevantLocoVoteStatusMessage(channel) {
-  try {
-    const fetched = await channel.messages.fetch({
-      limit: CONFIG.pollReminder.maxMessageScan,
-    });
-
-    const maxAgeMs = CONFIG.pollReminder.maxRelevantMessageAgeDays * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-
-    const relevantMessages = [...fetched.values()]
-      .filter((msg) => {
-        if (!msg.author || msg.author.id !== CONFIG.locoVoteBotId) return false;
-        if (now - msg.createdTimestamp > maxAgeMs) return false;
-
-        const content = msg.content || '';
-        return (
-          content.includes(CONFIG.pollReminder.statusNeedVote) ||
-          content.includes(CONFIG.pollReminder.statusAllDone)
-        );
-      })
-      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
-
-    return relevantMessages[0] || null;
-  } catch (error) {
-    console.error('[pollReminder] Fehler beim Laden der Loco Vote Nachrichten:', error.message);
-    return null;
-  }
-}
-
-async function processPollReminderCheck() {
-  if (!CONFIG.pollReminder.enabled) return;
-
-  const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-
-  const inTimeWindow =
-    hour === CONFIG.pollReminder.triggerHour &&
-    minute >= CONFIG.pollReminder.triggerMinute &&
-    minute < CONFIG.pollReminder.triggerMinute + CONFIG.pollReminder.triggerWindowMinutes;
-
-  if (!inTimeWindow) return;
-
-  const tomorrowDay = getTomorrowEventDayNumber(now);
-  const channelId = CONFIG.channels.pollsByEventDay[tomorrowDay];
-  if (!channelId) {
-    console.log('[pollReminder] Kein Kanal für morgigen Spieltag gefunden.');
-    return;
-  }
-
-  const reminderKey = `${getTodayKey(now)}:${channelId}`;
-  if (sentPollReminderKeys.has(reminderKey)) return;
-
-  const channel = getChannel(channelId);
-  if (!channel || !channel.isTextBased()) {
-    console.error(`[pollReminder] Kanal nicht gefunden oder nicht textbasiert: ${channelId}`);
-    return;
-  }
-
-  console.log(`[pollReminder] Prüfe Kanal ${channelId} für morgigen Spieltag...`);
-
-  const statusMessage = await fetchLatestRelevantLocoVoteStatusMessage(channel);
-
-  if (!statusMessage) {
-    console.log(`[pollReminder] Keine relevante Loco Vote Nachricht in Kanal ${channelId} gefunden.`);
-    return;
-  }
-
-  const content = statusMessage.content || '';
-  console.log(`[pollReminder] Relevante Nachricht gefunden: ${content.slice(0, 200)}`);
-
-  if (content.includes(CONFIG.pollReminder.statusAllDone)) {
-    console.log(`[pollReminder] Alle haben abgestimmt in Kanal ${channelId}. Kein Reminder nötig.`);
-    sentPollReminderKeys.add(reminderKey);
-    return;
-  }
-
-  if (!content.includes(CONFIG.pollReminder.statusNeedVote)) {
-    console.log(`[pollReminder] Nachricht gefunden, aber ohne "Noch nicht abgestimmt" in Kanal ${channelId}.`);
-    return;
-  }
-
-  const mentions = extractUniqueMentions(content);
-
-  if (mentions.length === 0) {
-    console.log(`[pollReminder] "Noch nicht abgestimmt" gefunden, aber keine Mentions extrahiert in Kanal ${channelId}.`);
-    return;
-  }
-
-  const reminderText = pickRandom(CONFIG.pollReminder.variants)({
-    mentions: mentions.join(' '),
-  });
-
-  const sent = await safeSend(
-    channelId,
-    {
-      content: reminderText,
-      allowedMentions: {
-        users: true,
-      },
-    },
-    'pollReminder'
-  );
-
-  if (sent) {
-    sentPollReminderKeys.add(reminderKey);
-    console.log(`[pollReminder] Reminder erfolgreich gesendet in Kanal ${channelId}.`);
-  }
-}
+/* -------------------- POSITION PANEL -------------------- */
 
 function createPositionPanelEmbed() {
   return new EmbedBuilder()
@@ -854,6 +661,235 @@ async function ensurePositionPanelMessage() {
   }
 }
 
+/* -------------------- JERSEY SYSTEM -------------------- */
+
+function ensureJerseyFile() {
+  try {
+    const dataDir = path.dirname(JERSEY_FILE);
+
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    if (!fs.existsSync(JERSEY_FILE)) {
+      fs.writeFileSync(JERSEY_FILE, JSON.stringify({}, null, 2), 'utf8');
+    }
+  } catch (error) {
+    console.error('[jersey] Fehler beim Erstellen der Datei:', error.message);
+  }
+}
+
+function loadJerseyNumbers() {
+  try {
+    ensureJerseyFile();
+    const raw = fs.readFileSync(JERSEY_FILE, 'utf8');
+    const parsed = JSON.parse(raw || '{}');
+
+    const cleaned = {};
+    for (const [userId, number] of Object.entries(parsed)) {
+      const num = Number(number);
+      if (Number.isInteger(num) && num >= 1 && num <= 99) {
+        cleaned[userId] = num;
+      }
+    }
+
+    return cleaned;
+  } catch (error) {
+    console.error('[jersey] Fehler beim Laden:', error.message);
+    return {};
+  }
+}
+
+function saveJerseyNumbers(data) {
+  try {
+    ensureJerseyFile();
+    fs.writeFileSync(JERSEY_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    console.error('[jersey] Fehler beim Speichern:', error.message);
+  }
+}
+
+function getUserJerseyNumber(userId, data) {
+  return data[userId] ?? null;
+}
+
+function findUserIdByJerseyNumber(number, data) {
+  return Object.keys(data).find((userId) => data[userId] === number) || null;
+}
+
+function removeJerseyNumberByUser(userId, data) {
+  delete data[userId];
+}
+
+function assignJerseyNumber(userId, number, data) {
+  const currentOwner = findUserIdByJerseyNumber(number, data);
+  if (currentOwner) {
+    delete data[currentOwner];
+  }
+
+  delete data[userId];
+  data[userId] = number;
+}
+
+function getFreeNumbersInRange(min, max, data) {
+  const taken = new Set(Object.values(data));
+
+  const free = [];
+  for (let i = min; i <= max; i += 1) {
+    if (!taken.has(i)) {
+      free.push(i);
+    }
+  }
+
+  return free;
+}
+
+function formatJerseyNumber(number) {
+  return String(number).padStart(2, '0');
+}
+
+function buildJerseyPanelEmbed(data) {
+  const lines = [];
+
+  for (let i = 1; i <= 99; i += 1) {
+    const ownerId = findUserIdByJerseyNumber(i, data);
+    lines.push(`**${formatJerseyNumber(i)}** → ${ownerId ? `<@${ownerId}>` : 'frei'}`);
+  }
+
+  return new EmbedBuilder()
+    .setColor(CONFIG.branding.accentColor)
+    .setTitle(CONFIG.jerseyPanel.title)
+    .setDescription(
+      [
+        'Wähle hier deine Trikotnummer.',
+        '',
+        '**Wichtig:**',
+        '• jede Nummer kann nur **einmal** vergeben sein',
+        '• wenn du eine neue nimmst, wird deine alte automatisch ersetzt',
+        '• freie Nummern werden dir bei der Auswahl angezeigt',
+        '',
+        lines.join('\n'),
+      ].join('\n')
+    )
+    .setFooter({ text: CONFIG.branding.footer })
+    .setTimestamp();
+}
+
+function createJerseyButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('jersey_choose')
+      .setLabel('Trikotnummer wählen')
+      .setStyle(ButtonStyle.Primary),
+
+    new ButtonBuilder()
+      .setCustomId('jersey_show')
+      .setLabel('Meine Nummer')
+      .setStyle(ButtonStyle.Success),
+
+    new ButtonBuilder()
+      .setCustomId('jersey_remove')
+      .setLabel('Nummer entfernen')
+      .setStyle(ButtonStyle.Danger),
+
+    new ButtonBuilder()
+      .setCustomId('jersey_admin')
+      .setLabel('Admin vergeben')
+      .setStyle(ButtonStyle.Secondary),
+
+    new ButtonBuilder()
+      .setCustomId('jersey_refresh')
+      .setLabel('Panel aktualisieren')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function createJerseyRangeMenu(customIdPrefix = 'jersey_range') {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(customIdPrefix)
+      .setPlaceholder('Wähle einen Nummernbereich')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        JERSEY_RANGES.map((range) => ({
+          label: range.label,
+          value: range.key,
+        }))
+      )
+  );
+}
+
+function createJerseyNumberMenu(rangeKey, data, customIdPrefix = 'jersey_number') {
+  const range = JERSEY_RANGES.find((r) => r.key === rangeKey);
+  if (!range) return null;
+
+  const freeNumbers = getFreeNumbersInRange(range.min, range.max, data);
+  if (freeNumbers.length === 0) return null;
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${customIdPrefix}:${range.key}`)
+      .setPlaceholder(`Freie Nummern aus ${range.label}`)
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        freeNumbers.map((number) => ({
+          label: formatJerseyNumber(number),
+          value: String(number),
+        }))
+      )
+  );
+}
+
+function createAdminUserSelectMenu() {
+  return new ActionRowBuilder().addComponents(
+    new UserSelectMenuBuilder()
+      .setCustomId('jersey_admin_user')
+      .setPlaceholder('Wähle einen User')
+      .setMinValues(1)
+      .setMaxValues(1)
+  );
+}
+
+async function ensureJerseyPanelMessage() {
+  if (!CONFIG.jerseyPanel.enabled) return;
+
+  try {
+    const channel = getChannel(CONFIG.channels.jerseys);
+    if (!channel || !channel.isTextBased()) {
+      console.error('[jerseyPanel] Kanal nicht gefunden oder nicht textbasiert.');
+      return;
+    }
+
+    const data = loadJerseyNumbers();
+    const fetched = await channel.messages.fetch({ limit: 20 });
+
+    const existingMessage = [...fetched.values()].find((msg) => {
+      if (msg.author?.id !== client.user.id) return false;
+      const firstEmbed = msg.embeds?.[0];
+      return firstEmbed?.title === CONFIG.jerseyPanel.title;
+    });
+
+    const payload = {
+      embeds: [buildJerseyPanelEmbed(data)],
+      components: [createJerseyButtons()],
+    };
+
+    if (existingMessage) {
+      await existingMessage.edit(payload);
+      console.log('[jerseyPanel] Bestehende Trikotnummern-Nachricht aktualisiert.');
+    } else {
+      await channel.send(payload);
+      console.log('[jerseyPanel] Neue Trikotnummern-Nachricht gesendet.');
+    }
+  } catch (error) {
+    console.error('[jerseyPanel] Fehler beim Erstellen/Aktualisieren:', error.message);
+  }
+}
+
+/* -------------------- READY / WELCOME / GOODBYE -------------------- */
+
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ ${readyClient.user.tag} ist online.`);
   console.log(`🌍 TZ: ${process.env.TZ || 'not set'}`);
@@ -861,9 +897,11 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`📌 Goodbye Channel: ${CONFIG.channels.goodbye}`);
   console.log(`📌 Announcement Channel: ${CONFIG.channels.announcements}`);
   console.log(`📌 Position Channel: ${CONFIG.channels.positions}`);
+  console.log(`📌 Jersey Channel: ${CONFIG.channels.jerseys}`);
 
+  ensureJerseyFile();
   await ensurePositionPanelMessage();
-  setInterval(processPollReminderCheck, CONFIG.pollReminder.checkIntervalMs);
+  await ensureJerseyPanelMessage();
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -945,9 +983,13 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   }
 });
 
+/* -------------------- INTERACTIONS -------------------- */
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    /* ---------- BUTTONS ---------- */
     if (interaction.isButton()) {
+      /* POSITION BUTTONS */
       if (interaction.customId === 'positions_select_hp') {
         await interaction.reply({
           content: 'Wähle deine Hauptposition:',
@@ -1008,9 +1050,108 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
+
+      /* JERSEY BUTTONS */
+      if (interaction.customId === 'jersey_choose') {
+        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
+          await interaction.reply({
+            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Wähle zuerst einen Bereich für deine Trikotnummer:',
+          components: [createJerseyRangeMenu('jersey_range')],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'jersey_show') {
+        const data = loadJerseyNumbers();
+        const currentNumber = getUserJerseyNumber(interaction.user.id, data);
+
+        await interaction.reply({
+          content: currentNumber
+            ? `Deine aktuelle Trikotnummer ist **${formatJerseyNumber(currentNumber)}**.`
+            : 'Du hast aktuell keine Trikotnummer.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'jersey_remove') {
+        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad) && interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const data = loadJerseyNumbers();
+        const currentNumber = getUserJerseyNumber(interaction.user.id, data);
+
+        if (!currentNumber) {
+          await interaction.reply({
+            content: 'Du hast aktuell keine Trikotnummer, die entfernt werden könnte.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        removeJerseyNumberByUser(interaction.user.id, data);
+        saveJerseyNumbers(data);
+        await ensureJerseyPanelMessage();
+
+        await interaction.reply({
+          content: `Deine Trikotnummer **${formatJerseyNumber(currentNumber)}** wurde entfernt.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'jersey_admin') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Wähle den User aus, dem du manuell eine Trikotnummer geben willst:',
+          components: [createAdminUserSelectMenu()],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'jersey_refresh') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await ensureJerseyPanelMessage();
+
+        await interaction.reply({
+          content: 'Das Trikotnummern-Panel wurde aktualisiert.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
     }
 
+    /* ---------- STRING SELECT MENUS ---------- */
     if (interaction.isStringSelectMenu()) {
+      /* POSITION MENUS */
       if (interaction.customId === 'positions_hp_menu') {
         const selected = interaction.values[0];
         const allHpRoles = Object.values(CONFIG.roles.hpPositions);
@@ -1093,6 +1234,161 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const text = `${title}\n\n${buildHPOverview(filteredMembers)}`;
         await replyWithChunks(interaction, text);
+        return;
+      }
+
+      /* JERSEY MENUS USER FLOW */
+      if (interaction.customId === 'jersey_range') {
+        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
+          await interaction.reply({
+            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const rangeKey = interaction.values[0];
+        const data = loadJerseyNumbers();
+        const numberMenu = createJerseyNumberMenu(rangeKey, data, 'jersey_number');
+
+        if (!numberMenu) {
+          await interaction.reply({
+            content: 'In diesem Bereich sind aktuell keine freien Nummern mehr verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Wähle jetzt deine freie Trikotnummer:',
+          components: [numberMenu],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId.startsWith('jersey_number:')) {
+        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
+          await interaction.reply({
+            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const chosenNumber = Number(interaction.values[0]);
+        const data = loadJerseyNumbers();
+
+        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
+        if (ownerId && ownerId !== interaction.user.id) {
+          await interaction.reply({
+            content: 'Diese Nummer ist leider gerade nicht mehr frei. Versuch bitte eine andere.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const oldNumber = getUserJerseyNumber(interaction.user.id, data);
+        assignJerseyNumber(interaction.user.id, chosenNumber, data);
+        saveJerseyNumbers(data);
+        await ensureJerseyPanelMessage();
+
+        await interaction.reply({
+          content: oldNumber
+            ? `Deine Trikotnummer wurde von **${formatJerseyNumber(oldNumber)}** auf **${formatJerseyNumber(chosenNumber)}** geändert.`
+            : `Deine Trikotnummer ist jetzt **${formatJerseyNumber(chosenNumber)}**.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      /* JERSEY MENUS ADMIN FLOW */
+      if (interaction.customId.startsWith('jersey_admin_range:')) {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const targetUserId = interaction.customId.split(':')[1];
+        const rangeKey = interaction.values[0];
+        const data = loadJerseyNumbers();
+        const numberMenu = createJerseyNumberMenu(rangeKey, data, `jersey_admin_number:${targetUserId}`);
+
+        if (!numberMenu) {
+          await interaction.reply({
+            content: 'In diesem Bereich sind aktuell keine freien Nummern mehr verfügbar.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: `Wähle jetzt die freie Nummer für <@${targetUserId}>:`,
+          components: [numberMenu],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId.startsWith('jersey_admin_number:')) {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const targetUserId = interaction.customId.split(':')[1];
+        const chosenNumber = Number(interaction.values[0]);
+
+        const data = loadJerseyNumbers();
+        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
+
+        if (ownerId && ownerId !== targetUserId) {
+          await interaction.reply({
+            content: 'Diese Nummer ist leider gerade nicht mehr frei. Versuch bitte eine andere.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const oldNumber = getUserJerseyNumber(targetUserId, data);
+        assignJerseyNumber(targetUserId, chosenNumber, data);
+        saveJerseyNumbers(data);
+        await ensureJerseyPanelMessage();
+
+        await interaction.reply({
+          content: oldNumber
+            ? `Du hast <@${targetUserId}> die Nummer von **${formatJerseyNumber(oldNumber)}** auf **${formatJerseyNumber(chosenNumber)}** geändert.`
+            : `Du hast <@${targetUserId}> die Trikotnummer **${formatJerseyNumber(chosenNumber)}** gegeben.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
+
+    /* ---------- USER SELECT MENUS ---------- */
+    if (interaction.isUserSelectMenu()) {
+      if (interaction.customId === 'jersey_admin_user') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const targetUserId = interaction.values[0];
+
+        await interaction.reply({
+          content: `Wähle jetzt den Bereich für <@${targetUserId}>:`,
+          components: [createJerseyRangeMenu(`jersey_admin_range:${targetUserId}`)],
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
     }
