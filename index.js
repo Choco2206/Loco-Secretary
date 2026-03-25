@@ -7,17 +7,36 @@ const {
   AuditLogEvent,
   Events,
   EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  MessageFlags,
 } = require('discord.js');
 
 const roleAnnouncementData = require('./data/roleAnnouncement.json');
 
+const POSITION_ORDER = ['TW', 'AIV', 'IV', 'ZDM', 'ZOM', 'LMRM', 'ST'];
+
+const POSITION_LABELS = {
+  TW: 'TW',
+  AIV: 'AIV',
+  IV: 'IV',
+  ZDM: 'ZDM',
+  ZOM: 'ZOM',
+  LMRM: 'LM/RM',
+  ST: 'ST',
+};
+
 const CONFIG = {
   locoVoteBotId: '1478770226651992134',
+  ownerUserId: '1425580097661833443',
 
   channels: {
     welcome: '1426178803960516742',
     goodbye: '1426178916455944242',
     announcements: '1426178139234631700',
+    positions: '1439254263112011787',
 
     pollsByEventDay: {
       0: '1438857782442065960', // Sonntag
@@ -32,15 +51,28 @@ const CONFIG = {
 
   roles: {
     locoSquad: '1426495393742454834',
-    positions: {
-      TW: '1439254788322623598',
-      IV: '1439254755007529073',
-      ZDM: '1439254691547713649',
-      LM: '1439254617681825973',
-      RM: '1439254653949710367',
-      ZOM: '1439254585276502169',
-      LS: '1439254396587479040',
-      RS: '1439254478011367514',
+    tCup: '1482531092488654978',
+    tester: '1426495653751816284',
+    aushilfen: '1433124858102812692',
+
+    hpPositions: {
+      TW: '1486360144785834114',
+      AIV: '1486360230857019443',
+      IV: '1486360317264003142',
+      ZDM: '1486360379394359417',
+      ZOM: '1486381628476493944',
+      LMRM: '1486360560466530396',
+      ST: '1486360695900606625',
+    },
+
+    npPositions: {
+      TW: '1486360825542348931',
+      AIV: '1486360894568009831',
+      IV: '1486360958480945335',
+      ZDM: '1486361416830025788',
+      ZOM: '1486381783824994374',
+      LMRM: '1486362463409668127',
+      ST: '1486362611753685103',
     },
   },
 
@@ -63,7 +95,7 @@ Und nur damit du direkt weißt, worauf du dich hier eingelassen hast, Süßer:
 
 **Bevor du loslegst:**
 
-→ Wähle zuerst deine **Hauptposition + Nebenpositionen (ab Level 80)** in <#1439254263112011787>  
+→ Wähle zuerst deine **Hauptposition + Nebenpositionen** in <#1439254263112011787>  
 → Lies dir kurz <#1426178300522532935> durch  
 → Check regelmäßig <#1426178139234631700> für wichtige News  
 
@@ -168,7 +200,11 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
   roleAnnouncement: {
     enabled: true,
     batchWindowMs: 10_000,
-    maxShownPositions: 3,
+  },
+
+  positionPanel: {
+    enabled: true,
+    title: '📍 Loco Positionen',
   },
 
   pollReminder: {
@@ -316,42 +352,46 @@ function extractUniqueMentions(content) {
   return [...new Set(matches)];
 }
 
-function getMemberPositionKeys(member) {
-  const positions = [];
-
-  for (const [key, roleId] of Object.entries(CONFIG.roles.positions)) {
+function getMemberHPKey(member) {
+  for (const key of POSITION_ORDER) {
+    const roleId = CONFIG.roles.hpPositions[key];
     if (member.roles.cache.has(roleId)) {
-      positions.push(key);
+      return key;
     }
   }
 
-  return positions.slice(0, CONFIG.roleAnnouncement.maxShownPositions);
+  return null;
 }
 
-function buildRolePositionText(positionKeys) {
-  if (!positionKeys || positionKeys.length === 0) {
+function getMemberNPKeys(member) {
+  return POSITION_ORDER.filter((key) => {
+    const roleId = CONFIG.roles.npPositions[key];
+    return member.roles.cache.has(roleId);
+  });
+}
+
+function buildRolePositionText(positionKey) {
+  if (!positionKey) {
     return 'Mit seinem Join bekommt unser Rudel weitere Tiefe und neue Möglichkeiten für den Kader.';
   }
 
-  const snippets = positionKeys
-    .map((key) => roleAnnouncementData.positions[key])
-    .filter(Boolean)
-    .map((arr) => pickRandom(arr));
+  const snippets = roleAnnouncementData.positions[positionKey];
+  if (!snippets || !Array.isArray(snippets) || snippets.length === 0) {
+    return 'Mit seinem Join bekommt unser Rudel weitere Tiefe und neue Möglichkeiten für den Kader.';
+  }
 
-  if (snippets.length === 1) return snippets[0];
-  if (snippets.length === 2) return `${snippets[0]} ${snippets[1]}`;
-  return `${snippets[0]} ${snippets[1]} ${snippets[2]}`;
+  return pickRandom(snippets);
 }
 
 function buildRoleAnnouncementEmbed(member) {
-  const positions = getMemberPositionKeys(member);
+  const hpKey = getMemberHPKey(member);
   const mention = `${member}`;
   const title = pickRandom(roleAnnouncementData.titles);
   const intro = pickRandom(roleAnnouncementData.intros);
   const hype = pickRandom(roleAnnouncementData.hype);
   const ending = pickRandom(roleAnnouncementData.endings);
-  const positionLine = positions.length > 0 ? `**Positionen:** ${positions.join(' / ')}` : null;
-  const positionText = buildRolePositionText(positions);
+  const positionLine = hpKey ? `**Hauptposition:** ${POSITION_LABELS[hpKey]}` : '**Hauptposition:** Noch nicht ausgewählt';
+  const positionText = buildRolePositionText(hpKey);
 
   const description = [
     intro,
@@ -364,9 +404,7 @@ function buildRoleAnnouncementEmbed(member) {
     positionText,
     '',
     ending,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ].join('\n');
 
   return new EmbedBuilder()
     .setColor(CONFIG.branding.accentColor)
@@ -445,13 +483,11 @@ function queueRoleAnnouncement(guild, userId) {
       const ending = pickRandom(roleAnnouncementData.endings);
 
       const mentions = validMembers.map((m) => `${m}`).join(' ');
-      const allPositions = validMembers.flatMap((member) => getMemberPositionKeys(member));
-      const uniquePositions = [...new Set(allPositions)].slice(0, CONFIG.roleAnnouncement.maxShownPositions);
-
+      const uniqueHPs = [...new Set(validMembers.map((member) => getMemberHPKey(member)).filter(Boolean))];
       const positionLine =
-        uniquePositions.length > 0
-          ? `**Positionen im neuen Batch:** ${uniquePositions.join(' / ')}`
-          : null;
+        uniqueHPs.length > 0
+          ? `**Hauptpositionen im neuen Batch:** ${uniqueHPs.map((key) => POSITION_LABELS[key]).join(' / ')}`
+          : '**Hauptpositionen im neuen Batch:** Noch nicht ausgewählt';
 
       const description = [
         intro,
@@ -466,9 +502,7 @@ function queueRoleAnnouncement(guild, userId) {
         'Das Rudel wächst weiter — mehr Tiefe, mehr Optionen und mehr Möglichkeiten für das, was wir hier gemeinsam aufbauen.',
         '',
         ending,
-      ]
-        .filter(Boolean)
-        .join('\n');
+      ].join('\n');
 
       const embed = buildEmbed(title, description);
 
@@ -595,13 +629,240 @@ async function processPollReminderCheck() {
   }
 }
 
-client.once(Events.ClientReady, (readyClient) => {
+function createPositionPanelEmbed() {
+  return new EmbedBuilder()
+    .setColor(CONFIG.branding.accentColor)
+    .setTitle(CONFIG.positionPanel.title)
+    .setDescription(
+      [
+        'Hi Loco 👋',
+        '',
+        'bitte wähle hier deine **Hauptposition** und danach deine **Nebenpositionen** aus.',
+        '',
+        '**Wichtig:**',
+        '• genau **1 Hauptposition**',
+        '• bis zu **5 Nebenpositionen**',
+        '• bitte realistisch auswählen',
+        '',
+        'Das hilft bei Kaderplanung, Übersicht und Aufstellungen.',
+      ].join('\n')
+    )
+    .setFooter({ text: CONFIG.branding.footer })
+    .setTimestamp();
+}
+
+function createPositionButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('positions_select_hp')
+      .setLabel('Hauptposition wählen')
+      .setStyle(ButtonStyle.Primary),
+
+    new ButtonBuilder()
+      .setCustomId('positions_select_np')
+      .setLabel('Nebenpositionen wählen')
+      .setStyle(ButtonStyle.Secondary),
+
+    new ButtonBuilder()
+      .setCustomId('positions_show')
+      .setLabel('Meine Positionen')
+      .setStyle(ButtonStyle.Success),
+
+    new ButtonBuilder()
+      .setCustomId('positions_reset')
+      .setLabel('Zurücksetzen')
+      .setStyle(ButtonStyle.Danger),
+
+    new ButtonBuilder()
+      .setCustomId('positions_overview')
+      .setLabel('Übersicht')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function createHPMenu() {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('positions_hp_menu')
+      .setPlaceholder('Wähle deine Hauptposition')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        POSITION_ORDER.map((key) => ({
+          label: POSITION_LABELS[key],
+          value: key,
+        }))
+      )
+  );
+}
+
+function createNPMenu(currentHPKey = null) {
+  const options = POSITION_ORDER
+    .filter((key) => key !== currentHPKey)
+    .map((key) => ({
+      label: POSITION_LABELS[key],
+      value: key,
+    }));
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('positions_np_menu')
+      .setPlaceholder('Wähle bis zu 5 Nebenpositionen')
+      .setMinValues(0)
+      .setMaxValues(Math.min(5, options.length))
+      .addOptions(options)
+  );
+}
+
+function createOverviewMenu() {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('positions_overview_menu')
+      .setPlaceholder('Welche Übersicht möchtest du sehen?')
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions([
+        {
+          label: 'Loco Squad',
+          value: 'loco_squad',
+          description: 'Nur Mitglieder mit der Rolle Loco Squad',
+        },
+        {
+          label: 'T Cup / Tester / Aushilfen',
+          value: 'others_group',
+          description: 'Zusammengeführte Übersicht der drei Gruppen',
+        },
+      ])
+  );
+}
+
+function splitIntoChunks(text, maxLength = 1900) {
+  if (text.length <= maxLength) return [text];
+
+  const chunks = [];
+  let current = '';
+
+  for (const block of text.split('\n\n')) {
+    const candidate = current ? `${current}\n\n${block}` : block;
+    if (candidate.length <= maxLength) {
+      current = candidate;
+    } else {
+      if (current) chunks.push(current);
+
+      if (block.length <= maxLength) {
+        current = block;
+      } else {
+        const lines = block.split('\n');
+        let lineChunk = '';
+
+        for (const line of lines) {
+          const lineCandidate = lineChunk ? `${lineChunk}\n${line}` : line;
+          if (lineCandidate.length <= maxLength) {
+            lineChunk = lineCandidate;
+          } else {
+            if (lineChunk) chunks.push(lineChunk);
+            lineChunk = line;
+          }
+        }
+
+        current = lineChunk;
+      }
+    }
+  }
+
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function buildPositionsSummary(member) {
+  const hpKey = getMemberHPKey(member);
+  const npKeys = getMemberNPKeys(member);
+
+  return [
+    '**Deine Positionen**',
+    `Hauptposition: ${hpKey ? POSITION_LABELS[hpKey] : 'Keine'}`,
+    `Nebenpositionen: ${npKeys.length ? npKeys.map((key) => POSITION_LABELS[key]).join(', ') : 'Keine'}`,
+  ].join('\n');
+}
+
+function buildHPOverview(members) {
+  const result = [];
+
+  for (const pos of POSITION_ORDER) {
+    const roleId = CONFIG.roles.hpPositions[pos];
+    const matchingMembers = members.filter((member) => member.roles.cache.has(roleId));
+
+    if (matchingMembers.length === 0) {
+      result.push(`**${POSITION_LABELS[pos]}:**\naktuell keinen Spieler mit HP dort.`);
+    } else {
+      const lines = matchingMembers.map((member) => `<@${member.id}>`);
+      result.push(`**${POSITION_LABELS[pos]}:**\n${lines.join('\n')}`);
+    }
+  }
+
+  return result.join('\n\n');
+}
+
+async function replyWithChunks(interaction, text) {
+  const chunks = splitIntoChunks(text);
+
+  await interaction.reply({
+    content: chunks[0],
+    flags: MessageFlags.Ephemeral,
+  });
+
+  for (let i = 1; i < chunks.length; i += 1) {
+    await interaction.followUp({
+      content: chunks[i],
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
+async function ensurePositionPanelMessage() {
+  if (!CONFIG.positionPanel.enabled) return;
+
+  try {
+    const channel = getChannel(CONFIG.channels.positions);
+    if (!channel || !channel.isTextBased()) {
+      console.error('[positionPanel] Kanal nicht gefunden oder nicht textbasiert.');
+      return;
+    }
+
+    const fetched = await channel.messages.fetch({ limit: 20 });
+
+    const existingMessage = [...fetched.values()].find((msg) => {
+      if (msg.author?.id !== client.user.id) return false;
+      const firstEmbed = msg.embeds?.[0];
+      return firstEmbed?.title === CONFIG.positionPanel.title;
+    });
+
+    const payload = {
+      embeds: [createPositionPanelEmbed()],
+      components: [createPositionButtons()],
+    };
+
+    if (existingMessage) {
+      await existingMessage.edit(payload);
+      console.log('[positionPanel] Bestehende Positionen-Nachricht aktualisiert.');
+    } else {
+      await channel.send(payload);
+      console.log('[positionPanel] Neue Positionen-Nachricht gesendet.');
+    }
+  } catch (error) {
+    console.error('[positionPanel] Fehler beim Erstellen/Aktualisieren:', error.message);
+  }
+}
+
+client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ ${readyClient.user.tag} ist online.`);
   console.log(`🌍 TZ: ${process.env.TZ || 'not set'}`);
   console.log(`📌 Welcome Channel: ${CONFIG.channels.welcome}`);
   console.log(`📌 Goodbye Channel: ${CONFIG.channels.goodbye}`);
   console.log(`📌 Announcement Channel: ${CONFIG.channels.announcements}`);
+  console.log(`📌 Position Channel: ${CONFIG.channels.positions}`);
 
+  await ensurePositionPanelMessage();
   setInterval(processPollReminderCheck, CONFIG.pollReminder.checkIntervalMs);
 });
 
@@ -681,6 +942,177 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 
   if (!hadRoleBefore && hasRoleNow) {
     queueRoleAnnouncement(newMember.guild, newMember.id);
+  }
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  try {
+    if (interaction.isButton()) {
+      if (interaction.customId === 'positions_select_hp') {
+        await interaction.reply({
+          content: 'Wähle deine Hauptposition:',
+          components: [createHPMenu()],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_select_np') {
+        const currentHPKey = getMemberHPKey(interaction.member);
+
+        await interaction.reply({
+          content: currentHPKey
+            ? `Wähle deine Nebenpositionen. Deine Hauptposition **${POSITION_LABELS[currentHPKey]}** ist hier automatisch ausgeschlossen.`
+            : 'Wähle deine Nebenpositionen:',
+          components: [createNPMenu(currentHPKey)],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_show') {
+        await interaction.reply({
+          content: buildPositionsSummary(interaction.member),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_reset') {
+        const allPositionRoleIds = [
+          ...Object.values(CONFIG.roles.hpPositions),
+          ...Object.values(CONFIG.roles.npPositions),
+        ];
+
+        await interaction.member.roles.remove(allPositionRoleIds).catch(() => {});
+        await interaction.reply({
+          content: 'Deine Hauptposition und Nebenpositionen wurden zurückgesetzt.',
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_overview') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Welche Übersicht möchtest du sehen?',
+          components: [createOverviewMenu()],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      if (interaction.customId === 'positions_hp_menu') {
+        const selected = interaction.values[0];
+        const allHpRoles = Object.values(CONFIG.roles.hpPositions);
+
+        await interaction.member.roles.remove(allHpRoles).catch(() => {});
+        await interaction.member.roles.add(CONFIG.roles.hpPositions[selected]);
+
+        const currentNPs = getMemberNPKeys(interaction.member);
+        if (currentNPs.includes(selected)) {
+          await interaction.member.roles.remove(CONFIG.roles.npPositions[selected]).catch(() => {});
+        }
+
+        await interaction.reply({
+          content: `Deine Hauptposition ist jetzt **${POSITION_LABELS[selected]}**.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_np_menu') {
+        const currentHPKey = getMemberHPKey(interaction.member);
+        const selected = interaction.values.filter((key) => key !== currentHPKey);
+
+        const allNpRoles = Object.values(CONFIG.roles.npPositions);
+        await interaction.member.roles.remove(allNpRoles).catch(() => {});
+
+        if (selected.length > 0) {
+          const rolesToAdd = selected.map((key) => CONFIG.roles.npPositions[key]);
+          await interaction.member.roles.add(rolesToAdd);
+        }
+
+        const text =
+          selected.length > 0
+            ? `Deine Nebenpositionen sind jetzt: **${selected.map((key) => POSITION_LABELS[key]).join(', ')}**`
+            : 'Du hast aktuell keine Nebenpositionen ausgewählt.';
+
+        await interaction.reply({
+          content: text,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId === 'positions_overview_menu') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diese Übersicht kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.guild.members.fetch();
+
+        const allMembers = [...interaction.guild.members.cache.values()].filter(
+          (member) => !member.user.bot
+        );
+
+        let filteredMembers = [];
+
+        if (interaction.values[0] === 'loco_squad') {
+          filteredMembers = allMembers.filter((member) =>
+            member.roles.cache.has(CONFIG.roles.locoSquad)
+          );
+        }
+
+        if (interaction.values[0] === 'others_group') {
+          filteredMembers = allMembers.filter(
+            (member) =>
+              member.roles.cache.has(CONFIG.roles.tCup) ||
+              member.roles.cache.has(CONFIG.roles.tester) ||
+              member.roles.cache.has(CONFIG.roles.aushilfen)
+          );
+        }
+
+        const title =
+          interaction.values[0] === 'loco_squad'
+            ? '**Übersicht: Loco Squad**'
+            : '**Übersicht: T Cup / Tester / Aushilfen**';
+
+        const text = `${title}\n\n${buildHPOverview(filteredMembers)}`;
+        await replyWithChunks(interaction, text);
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('[interactionCreate] Fehler:', error);
+
+    try {
+      const payload = {
+        content: 'Da ist gerade etwas schiefgelaufen.',
+        flags: MessageFlags.Ephemeral,
+      };
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(payload);
+      } else {
+        await interaction.reply(payload);
+      }
+    } catch (followUpError) {
+      console.error('[interactionCreate] Fehler beim Error-Reply:', followUpError.message);
+    }
   }
 });
 
