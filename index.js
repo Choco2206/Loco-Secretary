@@ -90,7 +90,7 @@ const CONFIG = {
 
 🐺 **A new cutie joined the pack…**
 
-Na schau mal an… frischer Wind im Rudel.  
+Na schau mal an... frischer Wind im Rudel.  
 Willkommen bei **LOCO SQUAD** 🔴⚫  
 
 Und nur damit du direkt weißt, worauf du dich hier eingelassen hast, Süßer:  
