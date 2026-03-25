@@ -32,7 +32,7 @@
     "Der nächste Schritt für unser Team ist gemacht.",
     "Wieder ein offizieller Moment für Loco.",
     "Das Rudel bleibt nicht stehen.",
-    "Unser Team wächst weiter – genau so soll es sein.",
+    "Unser Team wächst weiter, genau so soll es sein.",
     "Die nächste Verstärkung ist da.",
     "Loco wird Stück für Stück größer.",
     "Ein weiterer Baustein ist gesetzt.",
@@ -47,18 +47,18 @@
     "Schritt für Schritt wächst dieses Team weiter.",
     "Mehr Qualität. Mehr Tiefe. Mehr Möglichkeiten.",
     "Genau so entwickelt sich ein starkes Rudel.",
-    "Unser Team wird größer – und stärker.",
+    "Unser Team wird größer und stärker.",
     "Jeder neue Name ist ein weiterer Schritt nach vorne.",
     "Genau solche Adds machen ein Rudel kompletter.",
     "Wir bauen weiter an Tiefe und Qualität.",
     "Das hier zeigt, dass wir nicht stillstehen.",
-    "Loco wächst nicht zufällig – sondern mit Plan.",
+    "Loco wächst nicht zufällig, sondern mit Plan.",
     "Jeder neue Spieler macht uns variabler.",
     "Genau so wird aus einem Team ein echtes Rudel.",
     "Dieses Projekt wird größer, voller und gefährlicher.",
     "So entsteht nach und nach ein starker Kader.",
     "Jeder offizielle Join bringt uns weiter.",
-    "Wir sammeln nicht nur Namen – wir bauen etwas auf.",
+    "Wir sammeln nicht nur Namen, wir bauen etwas auf.",
     "Mehr Optionen bedeuten mehr Stärke für das gesamte Rudel.",
     "Der Kader wird breiter, flexibler und besser besetzt.",
     "Genau das sind die Schritte, die uns wachsen lassen.",
@@ -66,7 +66,7 @@
     "Ein weiterer Move, der uns langfristig stärker macht."
   ],
   "endings": [
-    "Also Rudel – nehmt ihn gut auf.",
+    "Also Rudel, nehmt ihn gut auf.",
     "Willkommen im Team.",
     "Willkommen im Rudel.",
     "Schön, dass du jetzt offiziell dabei bist.",
@@ -74,9 +74,9 @@
     "Zeit, dich hier richtig einzuleben.",
     "Ab jetzt bist du offiziell Teil von etwas Größerem.",
     "Mach dich bereit für Loco Mentalität.",
-    "Jetzt bist du nicht mehr nur dabei – jetzt gehörst du dazu.",
+    "Jetzt bist du nicht mehr nur dabei, jetzt gehörst du dazu.",
     "Ab sofort bist du ein offizieller Teil des Rudels.",
-    "Rudel – zeigt ihm, wie wir hier ticken.",
+    "Rudel, zeigt ihm, wie wir hier ticken.",
     "Auf eine starke Zeit bei Loco.",
     "Jetzt beginnt dein offizieller Loco-Abschnitt.",
     "Schön, dich jetzt fest im Team zu haben.",
@@ -89,52 +89,46 @@
   ],
   "positions": {
     "TW": [
-      "Zwischen den Pfosten bringt er zusätzliche Sicherheit und eine starke letzte Linie mit.",
-      "Im Kasten sorgt er für Stabilität und Präsenz als letzte Absicherung.",
-      "Als Keeper gibt er uns mehr Sicherheit auf der wichtigsten Defensivposition.",
-      "Mit seiner Rolle im Tor wird unsere letzte Linie noch besser abgesichert."
+      "Zwischen den Pfosten bringt er zusätzliche Sicherheit, Ruhe und Präsenz als letzte Instanz mit.",
+      "Im Tor gibt er uns mehr Stabilität, klare Aktionen und eine starke letzte Linie.",
+      "Als Keeper verstärkt er unser Fundament ganz hinten mit Sicherheit und Übersicht.",
+      "Mit ihm im Kasten gewinnen wir mehr Ruhe, Absicherung und Präsenz auf der letzten Position."
+    ],
+    "AIV": [
+      "In der Abwehr bringt er Stabilität, Präsenz und wichtige Tiefe für unsere letzte Linie mit.",
+      "Als AIV gibt er uns defensiv mehr Struktur, Zweikampfstärke und Absicherung.",
+      "Hinten sorgt er für mehr Kontrolle, Stabilität und zusätzliche Qualität in der Defensive.",
+      "Mit seiner Rolle in der Abwehr werden wir hinten variabler, kompakter und schwerer zu bespielen."
     ],
     "IV": [
-      "In der Abwehr bringt er Stabilität, Präsenz und Ruhe in unsere letzte Linie.",
-      "Als Innenverteidiger verstärkt er unsere Defensive mit Struktur und Klarheit.",
-      "Hinten gibt er uns mehr Stabilität und zusätzliche Optionen in der Defensive.",
-      "In der Innenverteidigung sorgt er für Ordnung, Präsenz und defensive Tiefe."
+      "In der Innenverteidigung bringt er Ruhe, Präsenz und Stabilität in unsere letzte Linie.",
+      "Als IV verstärkt er unsere Defensive mit Klarheit, Absicherung und Struktur.",
+      "Hinten gibt er uns zusätzliche Stabilität und mehr Optionen in der Abwehr.",
+      "Mit ihm in der Innenverteidigung gewinnen wir an Präsenz, Ordnung und defensiver Tiefe."
     ],
     "ZDM": [
-      "Im Zentrum kann er für Kontrolle, Balance und Absicherung vor der Kette sorgen.",
-      "Als ZDM bringt er Ordnung ins Zentrum und Stabilität vor der Defensive.",
-      "Im defensiven Mittelfeld gibt er uns mehr Kontrolle und Struktur im Spielaufbau.",
-      "Vor der Abwehr sorgt er für Balance, Übersicht und zusätzliche Stabilität."
-    ],
-    "LM": [
-      "Über links bringt er Tempo, Breite und Dynamik in unser Spiel.",
-      "Auf der linken Seite gibt er uns mehr Optionen für Druck und Bewegung.",
-      "Mit seiner Rolle auf links werden wir über außen noch variabler.",
-      "Links sorgt er für mehr Tiefe, Tempo und Präsenz auf dem Flügel."
-    ],
-    "RM": [
-      "Über rechts bringt er Tempo, Breite und Dynamik in unser Spiel.",
-      "Auf der rechten Seite gibt er uns mehr Optionen für Druck und Bewegung.",
-      "Mit seiner Rolle auf rechts werden wir über außen noch variabler.",
-      "Rechts sorgt er für mehr Tiefe, Tempo und Präsenz auf dem Flügel."
+      "Im Zentrum bringt er Kontrolle, Balance und wichtige Absicherung vor der Kette mit.",
+      "Als ZDM sorgt er für mehr Ordnung, Ruhe und Stabilität im Zentrum.",
+      "Vor der Abwehr gibt er uns zusätzliche Kontrolle, Übersicht und defensive Absicherung.",
+      "Mit seiner Rolle im defensiven Mittelfeld werden wir im Zentrum kompakter und strukturierter."
     ],
     "ZOM": [
-      "Im offensiven Zentrum bringt er Kreativität, Ideen und Verbindungen nach vorne.",
-      "Als ZOM kann er zwischen den Linien für mehr Gefahr und Spielwitz sorgen.",
-      "Im letzten Drittel gibt er uns zusätzliche Kreativität und offensive Lösungen.",
-      "Offensiv im Zentrum sorgt er für Ideen, Bewegung und spielerische Qualität."
+      "Im offensiven Zentrum bringt er Kreativität, Ideen und Verbindungen nach vorne mit.",
+      "Als ZOM sorgt er zwischen den Linien für Spielwitz, Druck und offensive Lösungen.",
+      "Vor dem letzten Drittel gibt er uns mehr Ideen, Übersicht und Qualität am Ball.",
+      "Mit seiner Rolle im offensiven Zentrum werden wir nach vorne variabler, gefährlicher und kreativer."
     ],
-    "LS": [
-      "In der Offensive bringt er Bewegung, Tiefe und zusätzliche Gefahr vor dem Tor.",
-      "Links im Angriff macht er uns vorne variabler und schwerer zu verteidigen.",
-      "In den offensiven Zonen sorgt er für Druck und neue Optionen im Abschluss.",
-      "Mit seiner Rolle im Angriff bekommen wir vorne noch mehr Möglichkeiten."
+    "LMRM": [
+      "Über außen bringt er Tempo, Breite und Dynamik in unser Spiel.",
+      "Auf den Flügeln gibt er uns mehr Tiefe, Bewegung und Optionen nach vorne.",
+      "Mit seiner Rolle auf außen werden wir im Umschalten und im Druckspiel noch variabler.",
+      "Über die Außenbahn sorgt er für mehr Tempo, Aktivität und Präsenz in unserem Offensivspiel."
     ],
-    "RS": [
-      "In der Offensive bringt er Bewegung, Tiefe und zusätzliche Gefahr vor dem Tor.",
-      "Rechts im Angriff macht er uns vorne variabler und schwerer zu verteidigen.",
-      "In den offensiven Zonen sorgt er für Druck und neue Optionen im Abschluss.",
-      "Mit seiner Rolle im Angriff bekommen wir vorne noch mehr Möglichkeiten."
+    "ST": [
+      "Vorne bringt er Präsenz, Tiefe und zusätzliche Gefahr im letzten Drittel mit.",
+      "Als Stürmer gibt er uns mehr Wucht, Bewegung und Abschlussgefahr in der Offensive.",
+      "Im Angriff sorgt er für neue Optionen, Druck und mehr Präsenz vor dem Tor.",
+      "Mit seiner Rolle ganz vorne werden wir offensiv direkter, gefährlicher und variabler."
     ]
   }
 }
