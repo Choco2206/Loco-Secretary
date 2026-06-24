@@ -744,6 +744,19 @@ function getFreeNumbersInRange(min, max, data) {
   return free;
 }
 
+function getTakenNumbersInRange(min, max, data) {
+  const taken = [];
+
+  for (let i = min; i <= max; i += 1) {
+    const ownerId = findUserIdByJerseyNumber(i, data);
+    if (ownerId) {
+      taken.push({ number: i, ownerId });
+    }
+  }
+
+  return taken;
+}
+
 function formatJerseyNumber(number) {
   return String(number).padStart(2, '0');
 }
@@ -804,6 +817,15 @@ function createJerseyButtons() {
   );
 }
 
+function createJerseyAdminReleaseButton() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('jersey_admin_release')
+      .setLabel('Admin Nummer freigeben')
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
 function createJerseyRangeMenu(customIdPrefix = 'jersey_range') {
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -815,6 +837,29 @@ function createJerseyRangeMenu(customIdPrefix = 'jersey_range') {
         JERSEY_RANGES.map((range) => ({
           label: range.label,
           value: range.key,
+        }))
+      )
+  );
+}
+
+function createJerseyTakenNumberMenu(rangeKey, data, customIdPrefix) {
+  const range = JERSEY_RANGES.find((r) => r.key === rangeKey);
+  if (!range) return null;
+
+  const takenNumbers = getTakenNumbersInRange(range.min, range.max, data);
+  if (takenNumbers.length === 0) return null;
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`${customIdPrefix}:${range.key}`)
+      .setPlaceholder(`Belegte Nummern aus ${range.label}`)
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        takenNumbers.map(({ number, ownerId }) => ({
+          label: `${formatJerseyNumber(number)} - ${ownerId}`,
+          description: `Aktuell vergeben an ${ownerId}`,
+          value: String(number),
         }))
       )
   );
@@ -873,7 +918,7 @@ async function ensureJerseyPanelMessage() {
 
     const payload = {
       embeds: [buildJerseyPanelEmbed(data)],
-      components: [createJerseyButtons()],
+      components: [createJerseyButtons(), createJerseyAdminReleaseButton()],
     };
 
     if (existingMessage) {
@@ -886,6 +931,19 @@ async function ensureJerseyPanelMessage() {
   } catch (error) {
     console.error('[jerseyPanel] Fehler beim Erstellen/Aktualisieren:', error.message);
   }
+}
+
+async function releaseJerseyNumberForUser(userId) {
+  const data = loadJerseyNumbers();
+  const currentNumber = getUserJerseyNumber(userId, data);
+
+  if (!currentNumber) return null;
+
+  removeJerseyNumberByUser(userId, data);
+  saveJerseyNumbers(data);
+  await ensureJerseyPanelMessage();
+
+  return currentNumber;
 }
 
 /* -------------------- READY / WELCOME / GOODBYE -------------------- */
@@ -941,6 +999,11 @@ client.on(Events.GuildBanAdd, async (ban) => {
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
+  const releasedNumber = await releaseJerseyNumberForUser(member.id);
+  if (releasedNumber) {
+    console.log(`[jersey] Nummer ${formatJerseyNumber(releasedNumber)} von ${member.id} automatisch freigegeben.`);
+  }
+
   if (!CONFIG.goodbye.enabled) return;
   if (recentBanIds.has(member.id)) return;
 
@@ -1130,6 +1193,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
+      if (interaction.customId === 'jersey_admin_release') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Wähle zuerst den Nummernbereich, aus dem du eine belegte Nummer freigeben willst:',
+          components: [createJerseyRangeMenu('jersey_admin_release_range')],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       if (interaction.customId === 'jersey_refresh') {
         if (interaction.user.id !== CONFIG.ownerUserId) {
           await interaction.reply({
@@ -1303,6 +1383,67 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       /* JERSEY MENUS ADMIN FLOW */
+      if (interaction.customId === 'jersey_admin_release_range') {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const rangeKey = interaction.values[0];
+        const data = loadJerseyNumbers();
+        const numberMenu = createJerseyTakenNumberMenu(rangeKey, data, 'jersey_admin_release_number');
+
+        if (!numberMenu) {
+          await interaction.reply({
+            content: 'In diesem Bereich ist aktuell keine Nummer belegt.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await interaction.reply({
+          content: 'Wähle jetzt die belegte Nummer, die freigegeben werden soll:',
+          components: [numberMenu],
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.customId.startsWith('jersey_admin_release_number:')) {
+        if (interaction.user.id !== CONFIG.ownerUserId) {
+          await interaction.reply({
+            content: 'Diesen Button kannst nur du benutzen.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        const chosenNumber = Number(interaction.values[0]);
+        const data = loadJerseyNumbers();
+        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
+
+        if (!ownerId) {
+          await interaction.reply({
+            content: 'Diese Nummer ist inzwischen schon frei.',
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        removeJerseyNumberByUser(ownerId, data);
+        saveJerseyNumbers(data);
+        await ensureJerseyPanelMessage();
+
+        await interaction.reply({
+          content: `Die Trikotnummer ${formatJerseyNumber(chosenNumber)} von <@${ownerId}> wurde freigegeben.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
       if (interaction.customId.startsWith('jersey_admin_range:')) {
         if (interaction.user.id !== CONFIG.ownerUserId) {
           await interaction.reply({
