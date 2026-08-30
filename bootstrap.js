@@ -55,6 +55,19 @@ if (!welcomePattern.test(source)) {
 
 source = source.replace(welcomePattern, `${welcomeBlock}\n\n  goodbye:`);
 
+// Goodbye notifications are obsolete. Keep the member-remove listener only
+// for releasing jersey numbers, but stop it before kick/leave messages.
+source = source.replace(
+  /\n\s*if \(!CONFIG\.goodbye\.enabled\) return;\n\s*if \(recentBanIds\.has\(member\.id\)\) return;[\s\S]*?\n\}\);\n\nclient\.on\(Events\.GuildMemberUpdate,/,
+  '\n  return;\n});\n\nclient.on(Events.GuildMemberUpdate,'
+);
+
+// Remove ban notification listener entirely.
+source = source.replace(
+  /\nclient\.on\(Events\.GuildBanAdd,[\s\S]*?\n\}\);\n\nclient\.on\(Events\.GuildMemberRemove,/,
+  '\nclient.on(Events.GuildMemberRemove,'
+);
+
 // Execute the patched index.js with /app as its real module directory so all
 // existing relative paths and the persistent /app/data volume keep working.
 const runtimeModule = new Module(indexFile, module);
