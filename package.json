@@ -4,7 +4,7 @@
   "description": "Loco Squad Discord Secretary Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node bootstrap.js"
+    "start": "node bootstrap2.js"
   },
   "keywords": [],
   "author": "Loco Squad",
