@@ -1,0 +1,31 @@
+{
+  "titles": [
+    "🐺 Willkommen im Rudel",
+    "🔴⚫ Verstärkung für Loco Squad",
+    "🐺 Das Rudel wächst"
+  ],
+  "intros": [
+    "Willkommen bei **LOCO SQUAD**.",
+    "Ab sofort gibt es Verstärkung für unser Rudel.",
+    "Ein neues Gesicht gehört ab sofort zu **LOCO SQUAD**."
+  ],
+  "hype": [
+    "Bei uns läuft nicht immer alles nach Lehrbuch. Genau das macht uns aus: **Wir leben vom Chaos und unsere Stärke ist das Chaos.**",
+    "Loco Squad steht für Zusammenhalt, Ehrgeiz und unseren eigenen Weg. Auf dem Platz mit Anspruch, daneben als Community.",
+    "Unser Weg ist nicht immer der geradeste. Aber genau aus diesem Chaos entsteht das, was Loco ausmacht: Zusammenhalt, Energie und der Wille, gemeinsam abzuliefern."
+  ],
+  "endings": [
+    "Willkommen im Rudel. 🐺🔴⚫",
+    "Schön, dass du dabei bist. Auf eine starke gemeinsame Zeit bei Loco. 🔴⚫",
+    "Ab jetzt heißt es: gemeinsam rein, gemeinsam wachsen, gemeinsam abliefern. 🐺"
+  ],
+  "positions": {
+    "TW": ["Zwischen den Pfosten bekommt unser Kader eine weitere Option."],
+    "AIV": ["Auf der Außenverteidigerposition bekommt unser Kader zusätzliche Tiefe."],
+    "IV": ["In der Innenverteidigung bekommt unser Kader zusätzliche Stabilität und Optionen."],
+    "ZDM": ["Im zentral-defensiven Mittelfeld wächst unsere Auswahl für Struktur und Absicherung."],
+    "ZOM": ["Im offensiven Mittelfeld bekommen wir eine weitere Option für Kreativität und Verbindung nach vorne."],
+    "LMRM": ["Auf den Außenbahnen wächst unsere Flexibilität und Tiefe."],
+    "ST": ["Im Sturm bekommt unser Kader eine weitere Option für die Offensive."]
+  }
+}
