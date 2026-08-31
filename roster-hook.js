@@ -1,9 +1,12 @@
-const { Client, Events, EmbedBuilder } = require('discord.js');
+const path = require('path');
+const { Client, Events, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 const ROSTER_CHANNEL_ID = '1543944303607414865';
 const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
 const ROSTER_TITLE = 'Aktuelle Kaderliste';
 const ACCENT_COLOR = 0xe84a8a;
+const ROSTER_BANNER_PATH = path.join(__dirname, 'assets', 'kaderliste-banner.png');
+const ROSTER_BANNER_NAME = 'kaderliste-banner.png';
 
 const HP_POSITIONS = [
   { key: 'TW', roleId: '1486360144785834114', group: 'goalkeeper' },
@@ -88,6 +91,7 @@ async function buildRosterEmbed(guild) {
         value: formatMembers(roster[group.key]),
       }))
     )
+    .setImage(`attachment://${ROSTER_BANNER_NAME}`)
     .setFooter({ text: `${players.length} Mitglieder mit der Rolle Loco Squad` })
     .setTimestamp();
 }
@@ -102,6 +106,7 @@ async function refreshRoster(client, guild) {
   }
 
   const embed = await buildRosterEmbed(guild);
+  const banner = new AttachmentBuilder(ROSTER_BANNER_PATH, { name: ROSTER_BANNER_NAME });
   const messages = await channel.messages.fetch({ limit: 30 });
   const existing = [...messages.values()].find((message) =>
     message.author?.id === client.user.id &&
@@ -111,10 +116,14 @@ async function refreshRoster(client, guild) {
   const payload = {
     embeds: [embed],
     allowedMentions: { parse: [] },
+    files: [banner],
   };
 
   if (existing) {
-    await existing.edit(payload);
+    await existing.edit({
+      ...payload,
+      attachments: [],
+    });
   } else {
     await channel.send(payload);
   }
