@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
+require('./roster-hook')();
+
 const file = path.join(__dirname, 'bootstrap.js');
 let source = fs.readFileSync(file, 'utf8');
 
