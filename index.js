@@ -221,7 +221,9 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
   squadChannels: {
     enabled: true,
     categoryName: '🏆・Loco Squad',
-    roleIds: ['1426495393742454834'],
+    roles: [
+      { id: '1426495393742454834', names: ['Loco Squad'] },
+    ],
     channels: [
       '📋・Aufstellung',
       '🏟️・Club-Facilities',
@@ -232,7 +234,10 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
   cupChannels: {
     enabled: true,
     categoryName: '🏆・Cups',
-    roleIds: ['1426495393742454834', '1482531092488654978'],
+    roles: [
+      { id: '1426495393742454834', names: ['Loco Squad'] },
+      { id: '1482531092488654978', names: ['T-Cup', 'T Cup', 'TCup'] },
+    ],
     channels: [
       '📋・Aufstellung',
       '🏟️・Club-Facilities',
@@ -326,21 +331,29 @@ async function ensureReadOnlyChannelArea(guild, areaConfig) {
         channel.name === areaConfig.categoryName
     );
 
-    const permissionOverwrites = readOnlyCategoryPermissions(guild, areaConfig.roleIds);
+    const permissionOverwrites = readOnlyCategoryPermissions(guild, areaConfig.resolvedRoleIds);
 
     if (!category) {
-      category = await guild.channels.create({
-        name: areaConfig.categoryName,
-        type: ChannelType.GuildCategory,
-        permissionOverwrites,
-        reason: 'Geschützten Loco-Bereich eingerichtet',
-      });
+      try {
+        category = await guild.channels.create({
+          name: areaConfig.categoryName,
+          type: ChannelType.GuildCategory,
+          permissionOverwrites,
+          reason: 'Geschützten Loco-Bereich eingerichtet',
+        });
+      } catch (error) {
+        throw new Error(`Kategorie konnte nicht erstellt werden: ${error.message}`);
+      }
       console.log(`[protectedChannels] Kategorie ${category.name} erstellt.`);
     } else {
-      await category.permissionOverwrites.set(
-        permissionOverwrites,
-        'Berechtigungen des geschützten Loco-Bereichs aktualisiert'
-      );
+      try {
+        await category.permissionOverwrites.set(
+          permissionOverwrites,
+          'Berechtigungen des geschützten Loco-Bereichs aktualisiert'
+        );
+      } catch (error) {
+        throw new Error(`Kategorieberechtigungen konnten nicht gesetzt werden: ${error.message}`);
+      }
       console.log(`[protectedChannels] Berechtigungen für ${category.name} aktualisiert.`);
     }
 
@@ -354,22 +367,44 @@ async function ensureReadOnlyChannelArea(guild, areaConfig) {
 
       if (existing) {
         if (!existing.permissionsLocked) {
-          await existing.lockPermissions();
+          try {
+            await existing.lockPermissions();
+          } catch (error) {
+            throw new Error(`Berechtigungen für ${channelName} konnten nicht synchronisiert werden: ${error.message}`);
+          }
         }
         continue;
       }
 
-      await guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        parent: category.id,
-        reason: 'Geschützten Loco-Bereich eingerichtet',
-      });
+      try {
+        await guild.channels.create({
+          name: channelName,
+          type: ChannelType.GuildText,
+          parent: category.id,
+          reason: 'Geschützten Loco-Bereich eingerichtet',
+        });
+      } catch (error) {
+        throw new Error(`Kanal ${channelName} konnte nicht erstellt werden: ${error.message}`);
+      }
       console.log(`[protectedChannels] Kanal ${channelName} erstellt.`);
     }
   } catch (error) {
     console.error(`[protectedChannels] ${areaConfig.categoryName} fehlgeschlagen:`, error.message);
   }
+}
+
+function normalizeRoleName(name) {
+  return name.toLocaleLowerCase('de').replace(/[^a-z0-9]/g, '');
+}
+
+function resolveAreaRoles(guild, roleConfigs) {
+  return roleConfigs.map((roleConfig) => {
+    const roleById = guild.roles.cache.get(roleConfig.id);
+    if (roleById) return roleById;
+
+    const wantedNames = new Set(roleConfig.names.map(normalizeRoleName));
+    return guild.roles.cache.find((role) => wantedNames.has(normalizeRoleName(role.name))) || null;
+  });
 }
 
 async function ensureProtectedChannels() {
@@ -385,17 +420,38 @@ async function ensureProtectedChannels() {
   await guild.roles.fetch();
   await guild.channels.fetch();
 
+  const botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+  const missingBotPermissions = [
+    [PermissionFlagsBits.ManageChannels, 'Kanäle verwalten'],
+    [PermissionFlagsBits.ManageRoles, 'Rollen verwalten'],
+  ]
+    .filter(([permission]) => !botMember?.permissions.has(permission))
+    .map(([, label]) => label);
+
+  if (missingBotPermissions.length > 0) {
+    console.error(
+      `[protectedChannels] Der Bot-Rolle fehlen: ${missingBotPermissions.join(', ')}. ` +
+      'Bitte diese Rechte in den Servereinstellungen aktivieren und den Bot neu starten.'
+    );
+    return;
+  }
+
   const areas = [CONFIG.squadChannels, CONFIG.cupChannels].filter((area) => area.enabled);
   for (const area of areas) {
-    const missingRoleIds = area.roleIds.filter((roleId) => !guild.roles.cache.has(roleId));
-    if (missingRoleIds.length > 0) {
+    const resolvedRoles = resolveAreaRoles(guild, area.roles);
+    const missingRoles = area.roles.filter((roleConfig, index) => !resolvedRoles[index]);
+    if (missingRoles.length > 0) {
       console.error(
-        `[protectedChannels] ${area.categoryName} nicht erstellt: Rollen fehlen (${missingRoleIds.join(', ')}).`
+        `[protectedChannels] ${area.categoryName} nicht erstellt: Rollen fehlen (` +
+        `${missingRoles.map((role) => role.names[0]).join(', ')}).`
       );
       continue;
     }
 
-    await ensureReadOnlyChannelArea(guild, area);
+    await ensureReadOnlyChannelArea(guild, {
+      ...area,
+      resolvedRoleIds: resolvedRoles.map((role) => role.id),
+    });
   }
 }
 
