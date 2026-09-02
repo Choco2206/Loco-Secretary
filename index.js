@@ -244,6 +244,28 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
       '🏆・Cup-Ruhmeshalle',
     ],
   },
+
+  voiceChannels: [
+    {
+      name: 'Liga D',
+      roles: [
+        { id: '1426495393742454834', names: ['Loco Squad'] },
+      ],
+    },
+    {
+      name: 'Loco Talk / Chillzone',
+      roles: [
+        { id: '1426495393742454834', names: ['Loco Squad'] },
+      ],
+    },
+    {
+      name: 'Cup Talk',
+      roles: [
+        { id: '1426495393742454834', names: ['Loco Squad'] },
+        { id: '1482531092488654978', names: ['T-Cup', 'T Cup', 'TCup'] },
+      ],
+    },
+  ],
 };
 
 const client = new Client({
@@ -407,6 +429,90 @@ function resolveAreaRoles(guild, roleConfigs) {
   });
 }
 
+function voiceChannelPermissions(guild, roleIds) {
+  const voiceAndChatPermissions = {
+    allow: [
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.Connect,
+      PermissionFlagsBits.Speak,
+      PermissionFlagsBits.Stream,
+      PermissionFlagsBits.UseVAD,
+      PermissionFlagsBits.UseEmbeddedActivities,
+      PermissionFlagsBits.UseSoundboard,
+      PermissionFlagsBits.UseExternalSounds,
+      PermissionFlagsBits.SendMessages,
+      PermissionFlagsBits.ReadMessageHistory,
+      PermissionFlagsBits.AttachFiles,
+      PermissionFlagsBits.EmbedLinks,
+      PermissionFlagsBits.AddReactions,
+      PermissionFlagsBits.UseExternalEmojis,
+      PermissionFlagsBits.UseExternalStickers,
+      PermissionFlagsBits.SendVoiceMessages,
+      PermissionFlagsBits.SendPolls,
+    ],
+  };
+
+  return [
+    {
+      id: guild.roles.everyone.id,
+      deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+    },
+    ...roleIds.map((roleId) => ({ id: roleId, ...voiceAndChatPermissions })),
+  ];
+}
+
+async function ensureVoiceChannels(guild) {
+  for (const voiceConfig of CONFIG.voiceChannels) {
+    const resolvedRoles = resolveAreaRoles(guild, voiceConfig.roles);
+    const missingRoles = voiceConfig.roles.filter((roleConfig, index) => !resolvedRoles[index]);
+
+    if (missingRoles.length > 0) {
+      console.error(
+        `[voiceChannels] ${voiceConfig.name} nicht erstellt: Rollen fehlen (` +
+        `${missingRoles.map((role) => role.names[0]).join(', ')}).`
+      );
+      continue;
+    }
+
+    const permissionOverwrites = voiceChannelPermissions(
+      guild,
+      resolvedRoles.map((role) => role.id)
+    );
+
+    try {
+      let channel = guild.channels.cache.find(
+        (candidate) =>
+          candidate.type === ChannelType.GuildVoice &&
+          candidate.name === voiceConfig.name
+      );
+
+      if (!channel) {
+        channel = await guild.channels.create({
+          name: voiceConfig.name,
+          type: ChannelType.GuildVoice,
+          parent: null,
+          permissionOverwrites,
+          reason: 'Geschützten Loco-Sprachkanal eingerichtet',
+        });
+        console.log(`[voiceChannels] Sprachkanal ${channel.name} erstellt.`);
+        continue;
+      }
+
+      if (channel.parentId !== null) {
+        await channel.setParent(null, { lockPermissions: false });
+      }
+
+      await channel.permissionOverwrites.set(
+        permissionOverwrites,
+        'Berechtigungen des geschützten Loco-Sprachkanals aktualisiert'
+      );
+      console.log(`[voiceChannels] Sprachkanal ${channel.name} aktualisiert.`);
+    } catch (error) {
+      console.error(`[voiceChannels] ${voiceConfig.name} fehlgeschlagen:`, error.message);
+    }
+  }
+}
+
 async function ensureProtectedChannels() {
   const anchorChannel = client.channels.cache.get(CONFIG.channels.welcome)
     || await client.channels.fetch(CONFIG.channels.welcome).catch(() => null);
@@ -453,6 +559,8 @@ async function ensureProtectedChannels() {
       resolvedRoleIds: resolvedRoles.map((role) => role.id),
     });
   }
+
+  await ensureVoiceChannels(guild);
 }
 
 function extractUniqueMentions(content) {
