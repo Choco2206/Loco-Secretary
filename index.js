@@ -15,6 +15,8 @@ const {
   StringSelectMenuBuilder,
   UserSelectMenuBuilder,
   MessageFlags,
+  ChannelType,
+  PermissionFlagsBits,
 } = require('discord.js');
 
 const roleAnnouncementData = require('./data/roleAnnouncement.json');
@@ -215,6 +217,28 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
     enabled: true,
     title: '👕 Loco Trikotnummern',
   },
+
+  squadChannels: {
+    enabled: true,
+    categoryName: '🏆・Loco Squad',
+    roleIds: ['1426495393742454834'],
+    channels: [
+      '📋・Aufstellung',
+      '🏟️・Club-Facilities',
+      '🥇・Liga-Ruhmeshalle',
+    ],
+  },
+
+  cupChannels: {
+    enabled: true,
+    categoryName: '🏆・Cups',
+    roleIds: ['1426495393742454834', '1482531092488654978'],
+    channels: [
+      '📋・Aufstellung',
+      '🏟️・Club-Facilities',
+      '🏆・Cup-Ruhmeshalle',
+    ],
+  },
 };
 
 const client = new Client({
@@ -258,6 +282,120 @@ async function safeSend(channelId, payload, label = 'unknown') {
   } catch (error) {
     console.error(`[${label}] Send error:`, error.message);
     return null;
+  }
+}
+
+/* -------------------- GESCHÜTZTE TEAM-KANÄLE -------------------- */
+
+function readOnlyCategoryPermissions(guild, roleIds) {
+  const readOnlyPermissions = {
+    allow: [
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.ReadMessageHistory,
+      PermissionFlagsBits.AddReactions,
+      PermissionFlagsBits.UseExternalEmojis,
+      PermissionFlagsBits.UseExternalStickers,
+    ],
+    deny: [
+      PermissionFlagsBits.SendMessages,
+      PermissionFlagsBits.SendMessagesInThreads,
+      PermissionFlagsBits.AttachFiles,
+      PermissionFlagsBits.EmbedLinks,
+      PermissionFlagsBits.CreatePublicThreads,
+      PermissionFlagsBits.CreatePrivateThreads,
+      PermissionFlagsBits.MentionEveryone,
+      PermissionFlagsBits.SendVoiceMessages,
+      PermissionFlagsBits.SendPolls,
+    ],
+  };
+
+  return [
+    {
+      id: guild.roles.everyone.id,
+      deny: [PermissionFlagsBits.ViewChannel],
+    },
+    ...roleIds.map((roleId) => ({ id: roleId, ...readOnlyPermissions })),
+  ];
+}
+
+async function ensureReadOnlyChannelArea(guild, areaConfig) {
+  try {
+    let category = guild.channels.cache.find(
+      (channel) =>
+        channel.type === ChannelType.GuildCategory &&
+        channel.name === areaConfig.categoryName
+    );
+
+    const permissionOverwrites = readOnlyCategoryPermissions(guild, areaConfig.roleIds);
+
+    if (!category) {
+      category = await guild.channels.create({
+        name: areaConfig.categoryName,
+        type: ChannelType.GuildCategory,
+        permissionOverwrites,
+        reason: 'Geschützten Loco-Bereich eingerichtet',
+      });
+      console.log(`[protectedChannels] Kategorie ${category.name} erstellt.`);
+    } else {
+      await category.permissionOverwrites.set(
+        permissionOverwrites,
+        'Berechtigungen des geschützten Loco-Bereichs aktualisiert'
+      );
+      console.log(`[protectedChannels] Berechtigungen für ${category.name} aktualisiert.`);
+    }
+
+    for (const channelName of areaConfig.channels) {
+      const existing = guild.channels.cache.find(
+        (channel) =>
+          channel.type === ChannelType.GuildText &&
+          channel.parentId === category.id &&
+          channel.name === channelName
+      );
+
+      if (existing) {
+        if (!existing.permissionsLocked) {
+          await existing.lockPermissions();
+        }
+        continue;
+      }
+
+      await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: category.id,
+        reason: 'Geschützten Loco-Bereich eingerichtet',
+      });
+      console.log(`[protectedChannels] Kanal ${channelName} erstellt.`);
+    }
+  } catch (error) {
+    console.error(`[protectedChannels] ${areaConfig.categoryName} fehlgeschlagen:`, error.message);
+  }
+}
+
+async function ensureProtectedChannels() {
+  const anchorChannel = client.channels.cache.get(CONFIG.channels.welcome)
+    || await client.channels.fetch(CONFIG.channels.welcome).catch(() => null);
+  const guild = anchorChannel?.guild;
+
+  if (!guild) {
+    console.error('[protectedChannels] Konfigurierter Loco-Secretary-Server nicht gefunden.');
+    return;
+  }
+
+  await guild.roles.fetch();
+  await guild.channels.fetch();
+
+  const areas = [CONFIG.squadChannels, CONFIG.cupChannels].filter((area) => area.enabled);
+  for (const area of areas) {
+    const missingRoleIds = area.roleIds.filter((roleId) => !guild.roles.cache.has(roleId));
+    if (missingRoleIds.length > 0) {
+      console.error(
+        `[protectedChannels] ${area.categoryName} nicht erstellt: Rollen fehlen (${missingRoleIds.join(', ')}).`
+      );
+      continue;
+    }
+
+    await ensureReadOnlyChannelArea(guild, area);
   }
 }
 
@@ -958,6 +1096,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`📌 Jersey Channel: ${CONFIG.channels.jerseys}`);
 
   ensureJerseyFile();
+  await ensureProtectedChannels();
   await ensurePositionPanelMessage();
   await ensureJerseyPanelMessage();
 });
