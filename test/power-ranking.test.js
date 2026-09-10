@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { scorePerformance } = require('../power-ranking/scoring');
-const { aggregateRanking, parseMatch, weekKey } = require('../power-ranking-hook')._test;
+const { aggregateRanking, paginatePlayers, parseMatch, weekKey } = require('../power-ranking-hook')._test;
 
 test('Punkteformel bewertet die vereinbarten Positionsleistungen', () => {
   assert.equal(scorePerformance({
@@ -58,4 +58,16 @@ test('Gesamtranking summiert nur verknüpfte, berechtigte und aktive Spiele', ()
   assert.equal(ranking.length, 1);
   assert.equal(ranking[0].points, 29.5);
   assert.equal(ranking[0].matches, 1);
+});
+
+test('EA-Spielerauswahl verteilt bis zu 50 Spieler auf 20er-Seiten', () => {
+  const players = Array.from({ length: 50 }, (_, index) => ({
+    playerId: String(index + 1),
+    playerName: `Spieler ${index + 1}`,
+  }));
+  assert.equal(paginatePlayers(players, 0).items.length, 20);
+  assert.equal(paginatePlayers(players, 1).items.length, 20);
+  assert.equal(paginatePlayers(players, 2).items.length, 10);
+  assert.equal(paginatePlayers(players, 2).pageCount, 3);
+  assert.equal(paginatePlayers(players, 99).page, 2);
 });

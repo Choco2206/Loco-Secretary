@@ -29,7 +29,9 @@ const OWNER_USER_ID = '1425580097661833443';
 const ACCENT_COLOR = 0xe84a8a;
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
 const MAX_SESSION_MS = 12 * 60 * 60 * 1000;
+const PLAYER_PAGE_SIZE = 20;
 const pendingClubSearches = new Map();
+const pendingPlayerSelections = new Map();
 let captureRunning = false;
 let refreshRunning = false;
 
@@ -455,6 +457,48 @@ function availablePlayers(matches, clubId) {
     .sort((a, b) => a.playerName.localeCompare(b.playerName, 'de'));
 }
 
+function paginatePlayers(players, requestedPage = 0) {
+  const pageCount = Math.max(1, Math.ceil(players.length / PLAYER_PAGE_SIZE));
+  const page = Math.max(0, Math.min(Number(requestedPage) || 0, pageCount - 1));
+  return {
+    page,
+    pageCount,
+    items: players.slice(page * PLAYER_PAGE_SIZE, (page + 1) * PLAYER_PAGE_SIZE),
+  };
+}
+
+function playerSelectionPayload(players, requestedPage = 0) {
+  const result = paginatePlayers(players, requestedPage);
+  const select = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('pr_player_select')
+      .setPlaceholder(`EA-Profil auswählen · Seite ${result.page + 1}/${result.pageCount}`)
+      .addOptions(result.items.map((player) => ({
+        label: player.playerName.slice(0, 100),
+        value: player.playerId,
+      })))
+  );
+  const navigation = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('pr_player_previous')
+      .setLabel('Zurück')
+      .setEmoji('⬅️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(result.page === 0),
+    new ButtonBuilder()
+      .setCustomId('pr_player_next')
+      .setLabel('Weiter')
+      .setEmoji('➡️')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(result.page >= result.pageCount - 1)
+  );
+  return {
+    content: `Wähle dein eigenes EA-Spielerprofil aus. **Seite ${result.page + 1} von ${result.pageCount}**`,
+    components: result.pageCount > 1 ? [select, navigation] : [select],
+    page: result.page,
+  };
+}
+
 async function handlePlayerLink(interaction, client) {
   if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) {
     return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
@@ -468,13 +512,11 @@ async function handlePlayerLink(interaction, client) {
     .map(([discordId, link]) => [String(link.playerId), discordId]));
   const players = availablePlayers(matches, data.club.clubId)
     .filter((player) => !claimed.has(player.playerId) || claimed.get(player.playerId) === interaction.user.id)
-    .slice(0, 25);
+    .slice(0, 50);
   if (!players.length) return interaction.editReply('In den verfügbaren EA-Spielen wurden keine freien Spielerprofile gefunden. Spiele zuerst mindestens eine Partie mit Loco Squad.');
-  const menu = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder().setCustomId('pr_player_select').setPlaceholder('Dein EA-Profil auswählen')
-      .addOptions(players.map((player) => ({ label: player.playerName.slice(0, 100), value: player.playerId })))
-  );
-  return interaction.editReply({ content: 'Wähle dein eigenes EA-Spielerprofil aus:', components: [menu] });
+  const selection = { players, page: 0, expiresAt: Date.now() + 10 * 60 * 1000 };
+  pendingPlayerSelections.set(interaction.user.id, selection);
+  return interaction.editReply(playerSelectionPayload(players, selection.page));
 }
 
 function recentMatchesMenu(data) {
@@ -621,6 +663,20 @@ async function handleInteraction(interaction, client) {
       return interaction.editReply('✅ Admin-Übersicht und Ranking wurden aktualisiert.');
     }
     if (interaction.isButton() && id === 'pr_link_player') return handlePlayerLink(interaction, client);
+    if (interaction.isButton() && ['pr_player_previous', 'pr_player_next'].includes(id)) {
+      if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
+      const selection = pendingPlayerSelections.get(interaction.user.id);
+      if (!selection || selection.expiresAt < Date.now()) {
+        pendingPlayerSelections.delete(interaction.user.id);
+        return interaction.update({ content: 'Die EA-Spielerauswahl ist abgelaufen. Öffne sie bitte erneut.', components: [] });
+      }
+      selection.page += id === 'pr_player_next' ? 1 : -1;
+      const payload = playerSelectionPayload(selection.players, selection.page);
+      selection.page = payload.page;
+      selection.expiresAt = Date.now() + 10 * 60 * 1000;
+      pendingPlayerSelections.set(interaction.user.id, selection);
+      return interaction.update({ content: payload.content, components: payload.components });
+    }
     if (interaction.isStringSelectMenu() && id === 'pr_player_select') {
       if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
       const playerId = interaction.values[0];
@@ -637,6 +693,7 @@ async function handleInteraction(interaction, client) {
         next.links[interaction.user.id] = { ...player, clubId: String(data.club.clubId), linkedAt: new Date().toISOString() };
         return next;
       });
+      pendingPlayerSelections.delete(interaction.user.id);
       await interaction.update({ content: `✅ Dein Discord-Profil ist jetzt mit **${player.playerName}** verbunden.`, components: [] });
       await refreshPanels(client, interaction.guild);
       return;
@@ -729,6 +786,7 @@ module.exports._test = {
   aggregateRanking,
   availablePlayers,
   matchTimestamp,
+  paginatePlayers,
   parseMatch,
   weekKey,
 };
