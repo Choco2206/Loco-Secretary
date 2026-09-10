@@ -15,7 +15,7 @@ const {
   TextInputStyle,
   UserSelectMenuBuilder,
 } = require('discord.js');
-const { getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
+const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
 const store = require('./power-ranking/store');
 const { POSITION_LABELS, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
 
@@ -268,16 +268,22 @@ async function ensureAdminPanel(client, guild) {
 
 function aggregateRanking(data, eligibleDiscordIds, targetWeek = weekKey()) {
   const linkByPlayerId = new Map();
+  const linkByPlayerName = new Map();
   for (const [discordId, link] of Object.entries(data.links)) {
     if (eligibleDiscordIds.has(discordId)) {
-      linkByPlayerId.set(`${link.clubId || 'legacy'}:${link.playerId}`, { discordId, ...link });
+      const linked = { discordId, ...link };
+      if (link.playerId) linkByPlayerId.set(`${link.clubId || 'legacy'}:${link.playerId}`, linked);
+      if (link.playerName) {
+        linkByPlayerName.set(`${link.clubId || 'legacy'}:${normalizePlayerName(link.playerName)}`, linked);
+      }
     }
   }
   const rows = new Map();
   for (const match of Object.values(data.matches)) {
     if (match.excluded || weekKey(match.timestamp) !== targetWeek) continue;
     for (const performance of match.performances || []) {
-      const link = linkByPlayerId.get(`${match.clubId || 'legacy'}:${performance.playerId}`);
+      const link = linkByPlayerId.get(`${match.clubId || 'legacy'}:${performance.playerId}`)
+        || linkByPlayerName.get(`${match.clubId || 'legacy'}:${normalizePlayerName(performance.playerName)}`);
       if (!link) continue;
       const row = rows.get(link.discordId) || {
         discordId: link.discordId, playerName: link.playerName, points: 0, matches: 0,
@@ -457,12 +463,32 @@ function availablePlayers(matches, clubId) {
     .sort((a, b) => a.playerName.localeCompare(b.playerName, 'de'));
 }
 
+function normalizePlayerName(value) {
+  return String(value || '').normalize('NFKC').trim().toLocaleLowerCase('de-DE');
+}
+
+function mergeClubMembersWithRecentIds(members, recentPlayers) {
+  const recentByName = new Map(recentPlayers.map((player) => [normalizePlayerName(player.playerName), player]));
+  const unique = new Map();
+  for (const member of members || []) {
+    const playerName = String(member.playerName || '').trim();
+    const normalized = normalizePlayerName(playerName);
+    if (!normalized || unique.has(normalized)) continue;
+    unique.set(normalized, {
+      playerName,
+      playerId: recentByName.get(normalized)?.playerId || null,
+    });
+  }
+  return [...unique.values()].sort((a, b) => a.playerName.localeCompare(b.playerName, 'de'));
+}
+
 function paginatePlayers(players, requestedPage = 0) {
   const pageCount = Math.max(1, Math.ceil(players.length / PLAYER_PAGE_SIZE));
   const page = Math.max(0, Math.min(Number(requestedPage) || 0, pageCount - 1));
   return {
     page,
     pageCount,
+    offset: page * PLAYER_PAGE_SIZE,
     items: players.slice(page * PLAYER_PAGE_SIZE, (page + 1) * PLAYER_PAGE_SIZE),
   };
 }
@@ -473,9 +499,9 @@ function playerSelectionPayload(players, requestedPage = 0) {
     new StringSelectMenuBuilder()
       .setCustomId('pr_player_select')
       .setPlaceholder(`EA-Profil auswählen · Seite ${result.page + 1}/${result.pageCount}`)
-      .addOptions(result.items.map((player) => ({
+      .addOptions(result.items.map((player, index) => ({
         label: player.playerName.slice(0, 100),
-        value: player.playerId,
+        value: String(result.offset + index),
       })))
   );
   const navigation = new ActionRowBuilder().addComponents(
@@ -506,14 +532,25 @@ async function handlePlayerLink(interaction, client) {
   const data = store.load();
   if (!data.club) return interaction.reply({ content: 'Der EA-Club wurde noch nicht eingerichtet.', flags: MessageFlags.Ephemeral });
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const matches = await getFriendlyMatches(data.club.clubId, data.club.platform, 50);
-  const claimed = new Map(Object.entries(data.links)
+  const [members, matches] = await Promise.all([
+    getClubMembers(data.club.clubId, data.club.platform),
+    getFriendlyMatches(data.club.clubId, data.club.platform, 50),
+  ]);
+  const claimedIds = new Map(Object.entries(data.links)
     .filter(([, link]) => String(link.clubId) === String(data.club.clubId))
     .map(([discordId, link]) => [String(link.playerId), discordId]));
-  const players = availablePlayers(matches, data.club.clubId)
-    .filter((player) => !claimed.has(player.playerId) || claimed.get(player.playerId) === interaction.user.id)
+  const claimedNames = new Map(Object.entries(data.links)
+    .filter(([, link]) => String(link.clubId) === String(data.club.clubId))
+    .map(([discordId, link]) => [normalizePlayerName(link.playerName), discordId]));
+  const players = mergeClubMembersWithRecentIds(members, availablePlayers(matches, data.club.clubId))
+    .filter((player) => {
+      const idOwner = player.playerId ? claimedIds.get(String(player.playerId)) : null;
+      const nameOwner = claimedNames.get(normalizePlayerName(player.playerName));
+      return (!idOwner || idOwner === interaction.user.id)
+        && (!nameOwner || nameOwner === interaction.user.id);
+    })
     .slice(0, 50);
-  if (!players.length) return interaction.editReply('In den verfügbaren EA-Spielen wurden keine freien Spielerprofile gefunden. Spiele zuerst mindestens eine Partie mit Loco Squad.');
+  if (!players.length) return interaction.editReply('EA hat aktuell keine freien Spielerprofile in der Mitgliederliste von Loco Squad geliefert.');
   const selection = { players, page: 0, expiresAt: Date.now() + 10 * 60 * 1000 };
   pendingPlayerSelections.set(interaction.user.id, selection);
   return interaction.editReply(playerSelectionPayload(players, selection.page));
@@ -679,16 +716,20 @@ async function handleInteraction(interaction, client) {
     }
     if (interaction.isStringSelectMenu() && id === 'pr_player_select') {
       if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
-      const playerId = interaction.values[0];
+      const selection = pendingPlayerSelections.get(interaction.user.id);
+      if (!selection || selection.expiresAt < Date.now()) {
+        pendingPlayerSelections.delete(interaction.user.id);
+        return interaction.update({ content: 'Die EA-Spielerauswahl ist abgelaufen. Öffne sie bitte erneut.', components: [] });
+      }
+      const player = selection.players[Number(interaction.values[0])];
+      if (!player) return interaction.update({ content: 'Dieses EA-Profil konnte nicht mehr zugeordnet werden. Öffne die Auswahl bitte erneut.', components: [] });
       const data = store.load();
       const claimedBy = Object.entries(data.links).find(([discordId, link]) =>
         String(link.clubId) === String(data.club.clubId)
-          && String(link.playerId) === playerId
+          && ((player.playerId && String(link.playerId) === String(player.playerId))
+            || normalizePlayerName(link.playerName) === normalizePlayerName(player.playerName))
           && discordId !== interaction.user.id);
       if (claimedBy) return interaction.update({ content: 'Dieses EA-Profil wurde inzwischen bereits verknüpft.', components: [] });
-      const player = availablePlayers(await getFriendlyMatches(data.club.clubId, data.club.platform, 50), data.club.clubId)
-        .find((item) => item.playerId === playerId);
-      if (!player) return interaction.update({ content: 'Das EA-Profil wurde nicht mehr in den verfügbaren Spielen gefunden.', components: [] });
       store.update((next) => {
         next.links[interaction.user.id] = { ...player, clubId: String(data.club.clubId), linkedAt: new Date().toISOString() };
         return next;
@@ -786,6 +827,8 @@ module.exports._test = {
   aggregateRanking,
   availablePlayers,
   matchTimestamp,
+  mergeClubMembersWithRecentIds,
+  normalizePlayerName,
   paginatePlayers,
   parseMatch,
   weekKey,

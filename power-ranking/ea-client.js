@@ -106,4 +106,14 @@ async function getFriendlyMatches(clubId, platform, maxResultCount = 50) {
   return Array.isArray(payload) ? payload : (payload?.matches || []);
 }
 
-module.exports = { EA_BASE_URL, getFriendlyMatches, searchClubs };
+async function getClubMembers(clubId, platform) {
+  const payload = await fetchJson('members/stats', { platform, clubId });
+  const members = Array.isArray(payload?.members) ? payload.members : [];
+  return members
+    .map((member) => ({
+      playerName: String(member?.name ?? member?.playername ?? member?.playerName ?? '').trim(),
+    }))
+    .filter((member) => member.playerName);
+}
+
+module.exports = { EA_BASE_URL, getClubMembers, getFriendlyMatches, searchClubs };

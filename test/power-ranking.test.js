@@ -3,7 +3,13 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { scorePerformance } = require('../power-ranking/scoring');
-const { aggregateRanking, paginatePlayers, parseMatch, weekKey } = require('../power-ranking-hook')._test;
+const {
+  aggregateRanking,
+  mergeClubMembersWithRecentIds,
+  paginatePlayers,
+  parseMatch,
+  weekKey,
+} = require('../power-ranking-hook')._test;
 
 test('Punkteformel bewertet die vereinbarten Positionsleistungen', () => {
   assert.equal(scorePerformance({
@@ -44,13 +50,13 @@ test('EA-Match wird für den verbundenen Club normalisiert', () => {
 test('Gesamtranking summiert nur verknüpfte, berechtigte und aktive Spiele', () => {
   const targetWeek = '2026-W37';
   const data = {
-    links: { discord1: { clubId: '46978', playerId: 'p1', playerName: 'Choco' } },
+    links: { discord1: { clubId: '46978', playerId: null, playerName: 'Choco' } },
     matches: {
       a: { clubId: '46978', timestamp: '2026-09-10T20:00:00.000Z', excluded: false, performances: [
-        { playerId: 'p1', position: 'forward', rating: 8, goals: 1, assists: 1, passesMade: 10, points: 29.5 },
+        { playerId: 'p1', playerName: 'Choco', position: 'forward', rating: 8, goals: 1, assists: 1, passesMade: 10, points: 29.5 },
       ] },
       b: { clubId: '46978', timestamp: '2026-09-10T21:00:00.000Z', excluded: true, performances: [
-        { playerId: 'p1', position: 'forward', rating: 10, goals: 10, points: 135 },
+        { playerId: 'p1', playerName: 'Choco', position: 'forward', rating: 10, goals: 10, points: 135 },
       ] },
     },
   };
@@ -70,4 +76,14 @@ test('EA-Spielerauswahl verteilt bis zu 50 Spieler auf 20er-Seiten', () => {
   assert.equal(paginatePlayers(players, 2).items.length, 10);
   assert.equal(paginatePlayers(players, 2).pageCount, 3);
   assert.equal(paginatePlayers(players, 99).page, 2);
+});
+
+test('vollständige Clubmitgliederliste übernimmt bekannte Match-IDs per Name', () => {
+  const members = Array.from({ length: 41 }, (_, index) => ({ playerName: `Spieler ${index + 1}` }));
+  const merged = mergeClubMembersWithRecentIds(members, [
+    { playerId: 'ea-21', playerName: 'SPIELER 21' },
+  ]);
+  assert.equal(merged.length, 41);
+  assert.equal(merged.find((player) => player.playerName === 'Spieler 21').playerId, 'ea-21');
+  assert.equal(paginatePlayers(merged, 2).items.length, 1);
 });
