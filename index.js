@@ -1260,7 +1260,6 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`📌 Jersey Channel: ${CONFIG.channels.jerseys}`);
 
   ensureJerseyFile();
-  await ensureProtectedChannels();
   await ensurePositionPanelMessage();
   await ensureJerseyPanelMessage();
 });
