@@ -17,7 +17,7 @@ const {
 } = require('discord.js');
 const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
 const store = require('./power-ranking/store');
-const { POSITION_LABELS, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
+const { POSITION_LABELS, SCORING, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
 
 const CHANNELS = Object.freeze({
   admin: '1547550736622157844',
@@ -330,6 +330,34 @@ function linkButton() {
   );
 }
 
+
+function scoringExplanationFields() {
+  const number = (value) => Number(value).toLocaleString('de-DE');
+  const icons = { goalkeeper: '🧤', defender: '🛡️', midfielder: '⚙️', forward: '⚡' };
+  const fields = [{
+    name: '📖 So werden die Punkte berechnet',
+    value: 'Die Punkte jedes gewerteten Spiels werden zur Wochensumme addiert. Es zählt die im jeweiligen Spiel gespielte Positionsgruppe. **EA-Man-of-the-Match: +3 Punkte** für alle Positionen. Zu null bedeutet: kein Gegentor. Pässe zählen in vollen 10er-Blöcken je Spiel (z. B. 29 erfolgreiche Pässe = 2 Blöcke).',
+  }];
+  for (const [position, label] of Object.entries(POSITION_LABELS)) {
+    const scoring = SCORING[position];
+    const parts = [
+      `EA-Rating × **${number(scoring.rating)}**`,
+      `Tor: **+${number(scoring.goal)}**`,
+      `Vorlage: **+${number(scoring.assist)}**`,
+    ];
+    if (scoring.cleanSheet) parts.push(`Zu null: **+${number(scoring.cleanSheet)}**`);
+    if (scoring.tackle) parts.push(`Erfolgreiches Tackling: **+${number(scoring.tackle)}**`);
+    if (scoring.tenPasses) parts.push(`Je 10 erfolgreiche Pässe: **+${number(scoring.tenPasses)}**`);
+    if (scoring.save) parts.push(`Parade: **+${number(scoring.save)}**`);
+    fields.push({ name: `${icons[position]} ${label}`, value: parts.join(' · ') });
+  }
+  fields.push({
+    name: '🏆 Wer steht vorne?',
+    value: 'Die höchste Gesamtpunktzahl gewinnt. Bei Gleichstand entscheiden der Reihe nach: mehr Spiele, mehr Punkte pro Spiel, höhere Durchschnittsbewertung, mehr EA-Man-of-the-Match-Auszeichnungen. Positionsführende werden nach der am häufigsten gespielten Positionsgruppe zugeordnet. Es zählen nur verknüpfte Loco-Squad-Spieler und freigegebene Spiele aus den gestarteten Wertungszeiträumen.',
+  });
+  return fields;
+}
+
 async function ensureRanking(client, guild) {
   if (refreshRunning) return;
   refreshRunning = true;
@@ -359,6 +387,7 @@ async function ensureRanking(client, guild) {
         '', '**GESAMTRANKING**', list.join('\n') || '*Noch keine gewerteten Spiele in dieser Woche.*',
         '', '**POSITIONSFÜHRENDE**', ...leaders,
       ].join('\n'))
+      .addFields(...scoringExplanationFields())
       .setFooter({ text: 'Montag 07:00 Uhr beginnt eine neue Rankingwoche.' })
       .setTimestamp();
     const message = await upsertBotMessage(target, '👑 Loco Power Ranking', {
