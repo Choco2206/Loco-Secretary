@@ -18,11 +18,12 @@ const {
 const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
 const store = require('./power-ranking/store');
 const { POSITION_LABELS, SCORING, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
+const { publishAward } = require('./power-ranking/weekly-award');
 
 const CHANNELS = Object.freeze({
   admin: '1547550736622157844',
   ranking: '1547550537216426045',
-  playerOfWeek: '1547551244170568046', // Wird mit Grafik und Special Awards im nächsten Schritt verwendet.
+  playerOfWeek: '1547551244170568046',
 });
 const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
 const OWNER_USER_ID = '1425580097661833443';
@@ -34,6 +35,7 @@ const pendingClubSearches = new Map();
 const pendingPlayerSelections = new Map();
 let captureRunning = false;
 let refreshRunning = false;
+let weeklyRunning = false;
 
 function isAdmin(interaction) {
   return interaction.user.id === OWNER_USER_ID
@@ -599,6 +601,30 @@ function recentMatchesMenu(data) {
 }
 
 async function archiveWeekIfNeeded(client, guild) {
+  if (weeklyRunning) return;
+  weeklyRunning = true;
+  try {
+    await closeRankingWeek(client, guild);
+    const archives = store.load().weeklyArchive;
+    const pending = Object.entries(archives).filter(([, archive]) => archive.publicationStatus === 'pending');
+    if (!pending.length) return;
+    const target = await channel(client, CHANNELS.playerOfWeek);
+    if (!target?.isTextBased()) throw new Error('Loco-der-Woche-Kanal nicht erreichbar.');
+    for (const [key, archive] of pending) {
+      await publishAward({
+        target, guild, botId: client.user.id, key, archive,
+        savePublication: (publication) => store.update((next) => {
+          Object.assign(next.weeklyArchive[key], publication);
+          return next;
+        }),
+      });
+    }
+  } finally {
+    weeklyRunning = false;
+  }
+}
+
+async function closeRankingWeek(client, guild) {
   const current = weekKey();
   const data = store.load();
   const previous = data.currentWeekKey;
@@ -611,7 +637,9 @@ async function archiveWeekIfNeeded(client, guild) {
   const eligibleIds = new Set(members.map((member) => member.id));
   const ranking = aggregateRanking(data, eligibleIds, previous);
   store.update((next) => {
-    next.weeklyArchive[previous] ||= { closedAt: new Date().toISOString(), ranking };
+    next.weeklyArchive[previous] ||= {
+      closedAt: new Date().toISOString(), ranking, publicationStatus: 'pending',
+    };
     next.currentWeekKey = current;
     return next;
   });
