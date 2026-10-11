@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { Collection } = require('discord.js');
 const { loadImage } = require('@napi-rs/canvas');
-const { weekDetails, renderAward, awardPayload, publishAward, awardMarker } = require('../power-ranking/weekly-award');
+const { weekDetails, renderAward, awardPayload, awardTextPayload, publishAward, awardMarker } = require('../power-ranking/weekly-award');
 
 const ranking = [
   { discordId: '1', playerName: 'Sieger', points: 321.75, matches: 18, averageRating: 8.42, manOfTheMatch: 5 },
@@ -25,11 +25,16 @@ test('Siegergrafik wird vollständig als PNG gerendert, auch ohne Avatar', async
   assert.equal(buffer.subarray(1, 4).toString(), 'PNG');
 });
 
-test('Wochenpost erwähnt genau das Podium und hängt die Grafik an', () => {
+test('Bildpost markiert Loco Squad, separater Hype-Text erwähnt genau das Podium', () => {
   const payload = awardPayload(ranking, '2026-W41', Buffer.from('test'));
-  assert.deepEqual(payload.allowedMentions, { parse: [], users: ['1', '2', '3'] });
-  assert.match(payload.embeds[0].data.description, /Platz 2.*<@2>/);
-  assert.match(payload.embeds[0].data.description, /Platz 3.*<@3>/);
+  assert.deepEqual(payload.allowedMentions, { parse: [], roles: ['1426495393742454834'] });
+  assert.match(payload.content, /<@&1426495393742454834>/);
+  const text = awardTextPayload(ranking, '2026-W41');
+  assert.deepEqual(text.allowedMentions, { parse: [], users: ['1', '2', '3'] });
+  assert.match(text.content, /Platz 2.*<@2>/);
+  assert.match(text.content, /Platz 3.*<@3>/);
+  assert.match(text.content, /<@1>, herzlichen Glückwunsch/);
+  assert.ok(text.content.length <= 2000);
   assert.equal(payload.embeds[0].data.image.url, 'attachment://loco-der-woche.png');
   assert.equal(payload.files.length, 1);
 });
@@ -40,7 +45,10 @@ test('Bereits akzeptierter Discord-Post wird nach fehlender Speicherung wiederge
   await publishAward({
     target: { messages: { fetch: async () => new Collection([['existing', {
       id: 'existing', author: { id: 'bot' }, embeds: [{ footer: { text: awardMarker('2026-W41') } }],
-    }]]) }, send: async () => assert.fail('Doppelter Post') },
+    }]]) }, send: async (payload) => {
+      assert.equal(payload.files, undefined);
+      return { id: 'text-post' };
+    } },
     guild: {}, botId: 'bot', key: '2026-W41', archive: { publicationStatus: 'pending', ranking },
     render: async () => { rendered = true; }, savePublication: (value) => { publication = value; },
   });
@@ -67,7 +75,33 @@ test('Fehlgeschlagener Versand bleibt offen und wird erneut versucht', async () 
   fail = false;
   await publishAward(args);
   await publishAward(args);
-  assert.equal(posts, 1);
+  assert.equal(posts, 2);
+  assert.equal(archive.publicationStatus, 'posted');
+});
+
+test('Fehler zwischen Bild und Text erzeugt beim nächsten Versuch kein zweites Bild', async () => {
+  const archive = { publicationStatus: 'pending', ranking };
+  const sent = new Collection();
+  let failText = true;
+  let images = 0;
+  let texts = 0;
+  const args = {
+    target: { messages: { fetch: async () => sent }, send: async (payload) => {
+      if (!payload.files && failText) throw new Error('Text fehlgeschlagen');
+      payload.files ? images++ : texts++;
+      const message = { id: String(sent.size + 1), author: { id: 'bot' }, content: payload.content, embeds: (payload.embeds || []).map((embed) => embed.data) };
+      sent.set(message.id, message);
+      return message;
+    } },
+    guild: { members: { fetch: async () => null } }, botId: 'bot', key: '2026-W41', archive,
+    render: async () => Buffer.from('test'), savePublication: (value) => Object.assign(archive, value),
+  };
+  await assert.rejects(publishAward(args), /Text fehlgeschlagen/);
+  assert.equal(archive.publicationStatus, 'pending');
+  failText = false;
+  await publishAward(args);
+  assert.equal(images, 1);
+  assert.equal(texts, 1);
   assert.equal(archive.publicationStatus, 'posted');
 });
 
