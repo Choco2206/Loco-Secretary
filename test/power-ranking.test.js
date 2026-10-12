@@ -53,7 +53,7 @@ test('Gesamtranking summiert nur verknüpfte, berechtigte und aktive Spiele', ()
     links: { discord1: { clubId: '46978', playerId: null, playerName: 'Choco' } },
     matches: {
       a: { clubId: '46978', timestamp: '2026-09-10T20:00:00.000Z', excluded: false, performances: [
-        { playerId: 'p1', playerName: 'Choco', position: 'forward', rating: 8, goals: 1, assists: 1, passesMade: 10, points: 29.5 },
+        { playerId: 'p1', playerName: 'Choco', position: 'forward', rating: 8, goals: 1, assists: 1, passesMade: 10, tacklesMade: 4, points: 29.5 },
       ] },
       b: { clubId: '46978', timestamp: '2026-09-10T21:00:00.000Z', excluded: true, performances: [
         { playerId: 'p1', playerName: 'Choco', position: 'forward', rating: 10, goals: 10, points: 135 },
@@ -64,6 +64,8 @@ test('Gesamtranking summiert nur verknüpfte, berechtigte und aktive Spiele', ()
   assert.equal(ranking.length, 1);
   assert.equal(ranking[0].points, 29.5);
   assert.equal(ranking[0].matches, 1);
+  assert.equal(ranking[0].passesMade, 10);
+  assert.equal(ranking[0].tacklesMade, 4);
 });
 
 test('EA-Spielerauswahl verteilt bis zu 50 Spieler auf 20er-Seiten', () => {

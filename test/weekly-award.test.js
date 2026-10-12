@@ -110,3 +110,36 @@ test('Leere Wertungswochen produzieren keinen erfundenen Sieger', async () => {
   await publishAward({ target: {}, key: '2026-W41', archive: { publicationStatus: 'pending', ranking: [] }, savePublication: (value) => { publication = value; } });
   assert.equal(publication.publicationStatus, 'empty');
 });
+
+test('Alle drei Plätze zeigen vollständige Leistungswerte innerhalb des Discord-Limits', () => {
+  const rows = ranking.map((row, i) => ({ ...row, matches: 26, averageRating: 7.68,
+    manOfTheMatch: 3, goals: i + 1, assists: i + 4, cleanSheets: i + 7,
+    tacklesMade: i + 10, passesMade: i + 100, saves: i + 13 }));
+  const text = awardTextPayload(rows, '2026-W41').content;
+  for (const label of ['Spiele:', 'Tore:', 'Vorlagen:', 'Zu-null:', 'Tacklings:', 'Erfolgreiche Pässe:', 'Paraden:']) {
+    assert.equal(text.split(label).length - 1, 3);
+  }
+  assert.ok(text.length <= 2000, `Textlänge: ${text.length}`);
+  assert.match(text, /Vorlagen: \*\*6\*\*/);
+  assert.match(text, /Pässe zählen je volle 10 pro Spiel/);
+});
+
+test('Archivierter Wochenbeitrag wird einmal bearbeitet ohne neuen Post oder Ping', async () => {
+  const archive = { publicationStatus: 'posted', ranking, textMessageId: 'text' };
+  let edits = 0;
+  const args = {
+    archive, key: '2026-W41', botId: 'bot',
+    target: { messages: { fetch: async (id) => {
+      assert.equal(id, 'text');
+      return { author: { id: 'bot' }, edit: async (payload) => {
+        edits++;
+        assert.deepEqual(payload.allowedMentions, { parse: [] });
+        assert.match(payload.content, /Tacklings:/);
+      } };
+    } }, send: async () => assert.fail('Kein neuer Beitrag') },
+    savePublication: (value) => Object.assign(archive, value),
+  };
+  await publishAward(args);
+  await publishAward(args);
+  assert.equal(edits, 1);
+});

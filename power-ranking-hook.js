@@ -18,7 +18,7 @@ const {
 const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
 const store = require('./power-ranking/store');
 const { POSITION_LABELS, SCORING, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
-const { publishAward } = require('./power-ranking/weekly-award');
+const { publishAward, TEXT_VERSION } = require('./power-ranking/weekly-award');
 
 const CHANNELS = Object.freeze({
   admin: '1547550736622157844',
@@ -290,7 +290,7 @@ function aggregateRanking(data, eligibleDiscordIds, targetWeek = weekKey()) {
       const row = rows.get(link.discordId) || {
         discordId: link.discordId, playerName: link.playerName, points: 0, matches: 0,
         ratingTotal: 0, goals: 0, assists: 0, saves: 0, cleanSheets: 0,
-        manOfTheMatch: 0, positions: {},
+        manOfTheMatch: 0, tacklesMade: 0, passesMade: 0, positions: {},
       };
       row.points += Number(performance.points ?? scorePerformance(performance));
       row.matches += 1;
@@ -299,6 +299,8 @@ function aggregateRanking(data, eligibleDiscordIds, targetWeek = weekKey()) {
       row.assists += Number(performance.assists) || 0;
       row.saves += Number(performance.saves) || 0;
       row.cleanSheets += Number(performance.cleanSheets) || 0;
+      row.tacklesMade += Number(performance.tacklesMade) || 0;
+      row.passesMade += Number(performance.passesMade) || 0;
       row.manOfTheMatch += Number(performance.manOfTheMatch) || 0;
       row.positions[performance.position] = (row.positions[performance.position] || 0) + 1;
       rows.set(link.discordId, row);
@@ -606,15 +608,27 @@ async function archiveWeekIfNeeded(client, guild) {
   try {
     await closeRankingWeek(client, guild);
     const archives = store.load().weeklyArchive;
-    const pending = Object.entries(archives).filter(([, archive]) => archive.publicationStatus === 'pending');
+    const pending = Object.entries(archives).filter(([, archive]) => archive.publicationStatus === 'pending'
+      || (archive.publicationStatus === 'posted' && archive.textMessageId && archive.textVersion !== TEXT_VERSION));
     if (!pending.length) return;
     const target = await channel(client, CHANNELS.playerOfWeek);
     if (!target?.isTextBased()) throw new Error('Loco-der-Woche-Kanal nicht erreichbar.');
     for (const [key, archive] of pending) {
+      // Keep the archived podium and scores; recover only missing counting statistics.
+      const data = store.load();
+      const recovered = aggregateRanking(data, new Set(archive.ranking.map((row) => row.discordId)), key);
+      archive.ranking = archive.ranking.map((row) => {
+        const source = recovered.find((item) => item.discordId === row.discordId);
+        if (!source || source.matches !== row.matches || source.points !== row.points) return row;
+        return { ...row,
+          tacklesMade: row.tacklesMade ?? source.tacklesMade,
+          passesMade: row.passesMade ?? source.passesMade,
+        };
+      });
       await publishAward({
         target, guild, botId: client.user.id, key, archive,
         savePublication: (publication) => store.update((next) => {
-          Object.assign(next.weeklyArchive[key], publication);
+          Object.assign(next.weeklyArchive[key], publication, { ranking: archive.ranking });
           return next;
         }),
       });
