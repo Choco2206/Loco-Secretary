@@ -6,6 +6,7 @@ const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Award');
 const TEMPLATE = path.join(__dirname, '..', 'assets', 'loco-der-woche.png');
+const TEXT_VERSION = 2;
 const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
 
 function weekDetails(key) {
@@ -106,7 +107,16 @@ function awardPayload(ranking, key, image) {
 function awardTextPayload(ranking, key) {
   const winner = ranking[0];
   const week = weekDetails(key);
-  const podium = ranking.slice(1, 3).map((row, index) => `${index === 0 ? '🥈' : '🥉'} **Platz ${index + 2}:** <@${row.discordId}> · **${number(row.points)} Punkte**`);
+  const stat = (row, key) => row[key] == null ? 'nicht gespeichert' : number(row[key]);
+  const stats = (row) => [
+    `🎮 Spiele: **${stat(row, 'matches')}** · ⭐ Ø Rating: **${stat(row, 'averageRating')}** · 🏅 MotM: **${stat(row, 'manOfTheMatch')}**`,
+    `⚽ Tore: **${stat(row, 'goals')}** · 🎯 Vorlagen: **${stat(row, 'assists')}** · 🧱 Zu-null: **${stat(row, 'cleanSheets')}**`,
+    `🛡️ Tacklings: **${stat(row, 'tacklesMade')}** · 🔄 Erfolgreiche Pässe: **${stat(row, 'passesMade')}** · 🧤 Paraden: **${stat(row, 'saves')}**`,
+  ];
+  const podium = ranking.slice(1, 3).flatMap((row, index) => [
+    `${index === 0 ? '🥈' : '🥉'} **Platz ${index + 2}:** <@${row.discordId}> · **${number(row.points)} Punkte**`,
+    ...stats(row), '',
+  ]);
   return {
     content: [
       `🔥 **DIESE WOCHE GEHÖRT DIR!**`,
@@ -114,15 +124,14 @@ function awardTextPayload(ranking, key) {
       `👑 <@${winner.discordId}>, herzlichen Glückwunsch zur Auszeichnung **Loco der Woche**!`,
       `**${number(winner.points)} Punkte** auf dem Konto und Platz 1 im Power Ranking. Du hast dir die Krone geholt. Lass dich feiern! 🐺🏆`,
       '',
-      '**DEINE WOCHE IN ZAHLEN**',
-      `🎮 Spiele: **${number(winner.matches)}**`,
-      `⭐ Ø EA-Rating: **${number(winner.averageRating)}**`,
-      `🏅 Man of the Match: **${number(winner.manOfTheMatch)}**`,
+      '🥇 **PLATZ 1 IN ZAHLEN**',
+      ...stats(winner),
       '',
       ...podium,
       ...(podium.length ? ['', 'Auch an euch: starke Leistung, verdient auf dem Podium! 👏'] : []),
       '',
-      'Neue Woche, neue Chance für jeden. Wer schnappt sich als Nächstes die Krone? Gebt Gas, pusht euch gegenseitig und holt als Team das Beste raus. **Vamos, Loco Squad!** 🔴⚫',
+      'Die Punkte werden pro Spiel nach der gespielten Position gewichtet und über die Woche addiert. Pässe zählen je volle 10 pro Spiel.',
+      'Neue Woche, neue Chance. **Vamos, Loco Squad!** 🔴⚫',
       '',
       `📅 **${week.label} · ${week.range}**`,
       `Wertung: ${week.starts}, 07:00 Uhr bis ${week.ends}, 07:00 Uhr (deutsche Zeit).`,
@@ -132,6 +141,19 @@ function awardTextPayload(ranking, key) {
 }
 
 async function publishAward({ target, guild, botId, key, archive, savePublication, render = renderAward }) {
+  if (archive.publicationStatus === 'posted' && archive.textVersion !== TEXT_VERSION && archive.textMessageId) {
+    const message = await target.messages.fetch(archive.textMessageId).catch((error) => {
+      if (error.code === 10008) return null;
+      throw error;
+    });
+    if (message?.author.id === botId) {
+      await message.edit({ ...awardTextPayload(archive.ranking, key), allowedMentions: { parse: [] } });
+      savePublication({ textVersion: TEXT_VERSION });
+    } else if (!message) {
+      savePublication({ textVersion: TEXT_VERSION });
+    }
+    return;
+  }
   if (archive.publicationStatus !== 'pending') return;
   if (!archive.ranking?.length) {
     savePublication({ publicationStatus: 'empty' });
@@ -158,7 +180,7 @@ async function publishAward({ target, guild, botId, key, archive, savePublicatio
   const textPayload = awardTextPayload(archive.ranking, key);
   let textMessage = messages.find((message) => message.author.id === botId && message.content === textPayload.content);
   if (!textMessage) textMessage = await target.send(textPayload);
-  savePublication({ publicationStatus: 'posted', messageId: existing.id, textMessageId: textMessage.id, postedAt: new Date().toISOString() });
+  savePublication({ publicationStatus: 'posted', messageId: existing.id, textMessageId: textMessage.id, textVersion: TEXT_VERSION, postedAt: new Date().toISOString() });
 }
 
-module.exports = { weekDetails, renderAward, awardPayload, awardTextPayload, publishAward, awardMarker };
+module.exports = { TEXT_VERSION, weekDetails, renderAward, awardPayload, awardTextPayload, publishAward, awardMarker };
