@@ -1,0 +1,13 @@
+# Wochenbericht im Spielstatistikkanal
+
+Nach `npm start` veröffentlicht der Bot montags um 07:30 Uhr Europe/Berlin einen Wochenbericht im Kanal `1559992305467916399` und markiert Rolle `1426495393742454834` (Loco Squad). Der Bericht umfasst **Montag 07:30 inklusive bis zum folgenden Montag 07:30 exklusive**, mit Sommer-/Winterzeit. Ein verpasster Termin wird beim nächsten Start/Prüflauf nachgeholt. Nachrichten werden über einen Wochenmarker im Kanalverlauf abgeglichen, damit ein Sendefehler oder Neustart keine zweite Rollenmarkierung erzeugt.
+
+Die erste erfasste Woche startet am **12.10.2026 um 07:30**, der erste Bericht ist am **19.10.2026 um 07:30** fällig. Es werden die jetzt noch verfügbaren passenden EA-Matches und anhand von Match-ID, Ergebnis und Spielzeit eindeutig rekonstruierbare eigene Spielstatistikposts übernommen. Diese erste Woche ist entsprechend als eingeschränkte Rückerfassung gekennzeichnet. Frühere Spiele, die EA nicht mehr liefert, können nicht rekonstruiert werden.
+
+Inhalt: Datum/Zeitfenster, Zahl erfasster Friendly Matches, Siege/Unentschieden/Niederlagen, Tore/Gegentore und Tordifferenz regulärer Spiele; vorzeitig beendete oder zeitlich unklare Matches separat mit EA-Wertungen; zusätzliche Gesamtbilanz nach EA. Eine kompakte Ergebnisliste zeigt bis zu zehn Spiele. Bei mehr Spielen enthält ein Textanhang die vollständige erfasste Ergebnisliste. Auch bei null erfassten Matches gibt es einen klar beschrifteten Bericht.
+
+Der bestehende nächtliche Matchfeed übergibt jede erfolgreiche EA-Abfrage an den Wochenarchiv-Speicher. Außerhalb seines Zeitfensters prüft der Wochenbericht zusätzlich alle zehn Minuten auf Friendly Matches. Auch am Veröffentlichungszeitpunkt wird EA noch einmal abgefragt. Tagesmatches können somit zum Wochenbericht zählen, ohne neue Einzelposts außerhalb 20–04 Uhr auszulösen. Match-IDs verhindern Doppelzählung. Es wird keine komplette EA-Saisonstatistik in die Wochenbilanz gemischt.
+
+Speicher: `data/weeklyReports.json`, optional unter `DATA_DIR`, auf persistentem Volume. Es werden nur die für Ergebnisse und Berichte benötigten Matchwerte gespeichert. Bereits veröffentlichte Berichte werden nicht jede Woche geändert. Langfristige Verfügbarkeit hängt von diesem Speicher ab; EA stellt nur eine begrenzte Historie bereit. Der Bot kann nur tatsächlich erfasste Spiele zählen. Die vorhandene Erkennung früher Enden ist datengestützt und beweist keinen absichtlichen Quit.
+
+Die Rolle muss für den Bot erwähnbar sein, damit Discord die Benachrichtigung zustellt. Im Payload ist ausschließlich diese Rollen-ID als Mention freigegeben. Logs: `[weekly-report]`. Validierung: `npm test`.

@@ -89,7 +89,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save) {
 
 function createService(client, options = {}) {
   const deps = {
-    load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest,
+    load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest, onMatches: () => {},
     getChannel: () => client.channels.fetch(CHANNEL_ID),
     recover: (channel, now) => recoverPosted(channel, client.user.id, now),
     ...options,
@@ -114,6 +114,7 @@ function createService(client, options = {}) {
         Object.assign(data.posted, recovered);
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save);
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
+        await deps.onMatches(raw, now);
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save);
         const matches = candidates(raw, now, data.posted);
         const refresh = deps.previewRequest;

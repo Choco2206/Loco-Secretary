@@ -8,7 +8,7 @@ module.exports = function installFriendlyMatchesHook() {
   Client.prototype.login = function (...args) {
     const client = this;
     client.once(Events.ClientReady, () => {
-      const service = createService(client);
+      const service = createService(client, { onMatches: require('./weekly-report/store').recordMatches });
       const tick = () => service.tick().catch(error => console.error('[friendly-matches] Prüfung fehlgeschlagen:', error.message));
       tick();
       const timer = setInterval(tick, 60 * 1000);
