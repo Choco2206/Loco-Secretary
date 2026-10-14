@@ -37,12 +37,16 @@ test('available matches seed first week, duplicate IDs count once, daytime match
   raw.matchId = 'old'; raw.timestamp = new Date('2026-10-12T05:29:59Z').getTime() / 1000;
   ingest(d, [raw], new Date('2026-10-15T00:00:00Z')); assert.equal(Object.keys(d.matches).length, 2);
 });
-test('report includes dates, exact role mention, separate balances and full attachment when more than ten games', () => {
+test('report includes dates, exact role mention, combined balance and every result embedded without a text attachment', () => {
   const d = state(); for (let i = 0; i < 25; i++) d.matches[i] = row(String(i), new Date(Date.UTC(2026, 9, 14, 19, i)).toISOString());
   const p = payload(d, FIRST_WEEK); const e = p.embeds[0].toJSON();
   assert.match(e.title, /12\.10\.2026 bis 19\.10\.2026/); assert.equal(e.footer.text, marker(FIRST_WEEK));
   assert.ok(p.content.includes(`<@&${ROLE_ID}>`)); assert.deepEqual(p.allowedMentions, { parse: [], roles: [ROLE_ID] });
-  assert.equal(p.files.length, 1); assert.equal(p.files[0].attachment.toString().split('gegen Opponent').length - 1, 25);
+  assert.equal(p.files.length, 1); assert.equal(p.files[0].name.endsWith('.png'), true);
+  assert.deepEqual(p.files[0].attachment.subarray(0, 4), Buffer.from([137, 80, 78, 71]));
+  assert.equal(e.image.url, `attachment://${p.files[0].name}`);
+  assert.ok(!e.fields.some(f => /Vorzeitig|Regulär/.test(f.name)));
+  assert.equal(e.fields[0].value, '25');
   assert.ok(e.fields.every(f => f.value.length <= 1024)); assert.ok(JSON.stringify(e).length < 6000);
   assert.match(payload(state(), FIRST_WEEK).embeds[0].toJSON().fields.at(-1).value, /Keine Friendly Matches/);
 });
@@ -112,4 +116,16 @@ test('first-week backfill recovers existing own match posts after EA history has
   const found = await seedFromPosts({ messages: { fetch: async () => messages } }, 'bot');
   assert.deepEqual(Object.keys(found), ['historical-id']);
   assert.equal(found['historical-id'].regular, true); assert.equal(found['historical-id'].ownGoals, 2);
+});
+
+test('more than ten and more than 225 results remain in a single message with every row and no txt files', () => {
+  for (const count of [14, 70, 230]) {
+    const d = state(); for (let i = 0; i < count; i++) d.matches[i] = row(String(i), new Date(Date.UTC(2026, 9, 14, 19, 0, i)).toISOString());
+    const p = payload(d, FIRST_WEEK);
+    assert.ok(p.embeds.length <= 10); assert.ok(p.files.length <= 9);
+    assert.ok(p.files.every(f => f.name.endsWith('.png')));
+    assert.equal(p.embeds[0].data.fields[0].value, String(count));
+    assert.equal(p.files.length, Math.ceil(count / Math.max(25, Math.ceil(count / 9))));
+    assert.ok(!p.embeds.some(e => /Letzte 10/.test(e.data.title || '')));
+  }
 });
