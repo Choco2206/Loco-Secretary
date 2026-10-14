@@ -45,3 +45,7 @@ Defensive Einordnung nutzt Gegenabschlüsse, Gegentore und erfolgreiche Tackling
 ## Nachpflege vorhandener Matchposts
 
 Bei jeder aktiven EA-Prüfung gleicht der Bot bereits veröffentlichte Match-IDs mit den noch verfügbaren EA-Matches ab. Fehlt einem passenden eigenen Post die Matchanalyse, wird sie als letzter Embed an dieselbe Nachricht angehängt. Vorhandene Embeds und Anhänge bleiben erhalten. Autor und Match-ID müssen übereinstimmen. Der Kanalverlauf und gespeicherte Layoutversion verhindern doppelte Ergänzungen nach Neustarts. Fehlgeschlagene Änderungen werden bei der nächsten Prüfung erneut versucht. Für Matches, deren Daten EA nicht mehr liefert, wird keine Analyse erfunden. Es werden 50 Matches angefragt; die tatsächliche Zahl hängt von EA ab.
+
+## Korrektur doppelter Bildergalerien
+
+Layout 5 stellt beim Bearbeiten die `attachment://`-Verweise für Bilder und Thumbnails wieder her. CDN-URLs aus empfangenen Discord-Embeds werden anhand der bestehenden Anhänge zu deren Dateinamen zurückgeführt. Die vorhandenen Anhänge werden über ihre IDs behalten, nicht erneut hochgeladen. So erscheinen sie ausschließlich an der vorgesehenen Embed-Stelle. Auch bestehende eigene Matchposts ohne noch verfügbare EA-Daten können hinsichtlich der Bildverweise repariert werden. Neue Posts verwenden bereits `attachment://`-Verweise.

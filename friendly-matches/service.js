@@ -23,7 +23,7 @@ async function recoverPosted(channel, botId, now) {
         const match = /^Friendly Match · (.+)$/.exec(embed.footer?.text || '');
         if (match) {
           const layout = (message.embeds || []).map(e => /^Friendly Layout · (\d+)$/.exec(e.footer?.text || '')).find(Boolean);
-          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1) };
+          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') };
         }
       }
     }
@@ -36,28 +36,52 @@ function embedLength(embeds) {
   return embeds.reduce((sum, e) => sum + (e.title?.length || 0) + (e.description?.length || 0) + (e.footer?.text?.length || 0)
     + (e.author?.name?.length || 0) + (e.fields || []).reduce((n, f) => n + f.name.length + f.value.length, 0), 0);
 }
+function restoreAttachmentReferences(message, embeds) {
+  const attachments = [...(message.attachments?.values() || [])];
+  const byName = new Map();
+  for (const attachment of attachments) if (!byName.has(attachment.name)) byName.set(attachment.name, attachment);
+  for (const embed of embeds) {
+    for (const key of ['image', 'thumbnail']) {
+      const url = embed.data[key]?.url;
+      if (!url || url.startsWith('attachment://')) continue;
+      const exact = attachments.find(a => a.url === url || a.proxyURL === url);
+      let filename;
+      try { filename = decodeURIComponent(new URL(url).pathname.split('/').pop()); } catch { continue; }
+      const attachment = exact || byName.get(filename);
+      if (!attachment) continue;
+      // Reconnect the embedded image to the uploaded file instead of displaying it as a separate gallery.
+      const reference = `attachment://${attachment.name}`;
+      if (key === 'image') embed.setImage(reference); else embed.setThumbnail(reference);
+      byName.set(attachment.name, attachment);
+    }
+  }
+  // Retain the existing uploads, choosing one ID per filename; no second upload is required.
+  return [...byName.values()].map(a => ({ id: a.id, filename: a.name }));
+}
 async function backfillAnalysis(channel, botId, rawMatches, data, save) {
   let updated = 0;
   const available = new Map(rawMatches.map(parseMatch).filter(Boolean).map(m => [m.id, m]));
   for (const [id, entry] of Object.entries(data.posted)) {
-    if ((entry.layoutVersion || 1) >= 4 || !available.has(id)) continue;
+    if ((entry.layoutVersion || 1) >= 5 && entry.analysisPresent) continue;
     try {
       const message = await channel.messages.fetch(entry.messageId);
       if (message.author?.id !== botId || !message.embeds?.some(e => e.footer?.text === `Friendly Match · ${id}`)) throw new Error('Nachricht stimmt nicht mit Bot und Match-ID überein.');
-      const embeds = message.embeds.map(e => EmbedBuilder.from(e));
-      if (!embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad')) {
-        embeds.push(buildAnalysis(available.get(id)));
-        if (embeds.length > 10 || embedLength(embeds.map(e => e.toJSON())) > 6000) throw new Error('Discord-Embed-Limit würde überschritten.');
-        // Keep the original attachments and every existing statistic; append only the analysis.
-        for (const e of embeds) if (/^Friendly Layout · \d+$/.test(e.data.footer?.text || '')) e.setFooter({ text: 'Friendly Layout · 4' });
-        await message.edit({ embeds, allowedMentions: { parse: [] } });
+      const before = message.embeds.map(e => typeof e.toJSON === 'function' ? e.toJSON() : e);
+      const embeds = before.map(e => EmbedBuilder.from(e));
+      if (!embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad') && available.has(id)) embeds.push(buildAnalysis(available.get(id)));
+      const attachments = restoreAttachmentReferences(message, embeds);
+      if (embeds.length > 10 || embedLength(embeds.map(e => e.toJSON())) > 6000) throw new Error('Discord-Embed-Limit würde überschritten.');
+      for (const e of embeds) if (/^Friendly Layout · \d+$/.test(e.data.footer?.text || '')) e.setFooter({ text: 'Friendly Layout · 5' });
+      if (JSON.stringify(before) !== JSON.stringify(embeds.map(e => e.toJSON()))) {
+        await message.edit({ embeds, ...(message.attachments ? { attachments } : {}), allowedMentions: { parse: [] } });
         updated++;
-        console.log(`[friendly-matches] Matchanalyse bei bestehendem Post ${id} ergänzt.`);
+        console.log(`[friendly-matches] Bestehender Post ${id}: Bildverweise repariert und verfügbare Matchanalyse ergänzt.`);
       }
-      entry.layoutVersion = 4;
+      entry.layoutVersion = 5;
+      entry.analysisPresent = embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
       save(data);
     } catch (error) {
-      console.error(`[friendly-matches] Matchanalyse für ${id} konnte nicht nachgetragen werden:`, error.message);
+      console.error(`[friendly-matches] Post ${id} konnte nicht nachgepflegt werden:`, error.message);
     }
   }
   return updated;
@@ -88,6 +112,7 @@ function createService(client, options = {}) {
         if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${CHANNEL_ID} nicht erreichbar.`);
         const recovered = await deps.recover(channel, now);
         Object.assign(data.posted, recovered);
+        if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save);
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save);
         const matches = candidates(raw, now, data.posted);
@@ -122,7 +147,7 @@ function createService(client, options = {}) {
         deps.save(data);
         for (const match of matches) {
           const message = await channel.send(await deps.buildPayload(match));
-          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION };
+          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION, analysisPresent: true };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
         }
@@ -131,4 +156,4 @@ function createService(client, options = {}) {
     },
   };
 }
-module.exports = { createService, recoverPosted, backfillAnalysis };
+module.exports = { createService, recoverPosted, backfillAnalysis, restoreAttachmentReferences };

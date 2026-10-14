@@ -26,14 +26,41 @@ test('existing match post receives analysis once without replacement posts or lo
   h.data.posted[fixture.matchId].layoutVersion = 3;
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
 });
-test('unavailable API match, other author and mismatched match marker do not modify messages', async () => {
-  const h = harness(); await backfillAnalysis(h.channel, 'bot', [], h.data, h.save); assert.equal(h.edits, 0);
-  h.message.author.id = 'other'; await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 0);
+test('image layout repair also works without EA; other author or mismatched marker is untouched', async () => {
+  const h = harness(); await backfillAnalysis(h.channel, 'bot', [], h.data, h.save); assert.equal(h.edits, 1);
+  assert.equal(h.message.embeds.length, 2);
+  const untouched = h.edits;
+  h.message.author.id = 'other'; await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, untouched);
   h.message.author.id = 'bot'; h.message.embeds[1].footer.text = 'Friendly Match · different';
-  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 0);
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, untouched);
 });
 test('failed edit stays pending for the next check', async () => {
   const h = harness(); const edit = h.message.edit; h.message.edit = async () => { throw new Error('Discord offline'); };
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.data.posted[fixture.matchId].layoutVersion, 3);
   h.message.edit = edit; await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
+});
+
+test('CDN references become attachment references for all three images, even without EA history', async () => {
+  const h = harness(); h.data.posted[fixture.matchId].layoutVersion = 4;
+  const filenames = ['ergebnis.png', 'loco-squad.png', 'gegner.png'];
+  const attachments = filenames.map((name, i) => ({ id: String(i + 1), name, url: `https://cdn.discordapp.com/attachments/1/2/${name}?ex=abc`, proxyURL: `https://media.discordapp.net/attachments/1/2/${name}?ex=abc` }));
+  h.message.attachments = new Map(attachments.map(a => [a.id, a]));
+  h.message.embeds = [new EmbedBuilder().setImage(attachments[0].url).setFooter({ text: 'Friendly Layout · 4' }).toJSON(),
+    new EmbedBuilder().setTitle('Statistics').setFooter({ text: `Friendly Match · ${fixture.matchId}` }).toJSON(),
+    new EmbedBuilder().setImage(attachments[1].proxyURL).toJSON(), new EmbedBuilder().setImage(attachments[2].url).toJSON(),
+    new EmbedBuilder().setTitle('🔎 Matchanalyse · Loco Squad').addFields({ name: 'Existing analysis', value: 'Keep this text' }).toJSON()];
+  let edits = 0;
+  h.message.edit = async p => {
+    assert.equal(p.files, undefined);
+    assert.deepEqual(p.attachments, filenames.map((filename, i) => ({ id: String(i + 1), filename })));
+    assert.equal(p.embeds[0].data.image.url, 'attachment://ergebnis.png');
+    assert.equal(p.embeds[2].data.image.url, 'attachment://loco-squad.png');
+    assert.equal(p.embeds[3].data.image.url, 'attachment://gegner.png');
+    assert.equal(p.embeds[4].data.fields[0].value, 'Keep this text');
+    edits++; h.message.embeds = p.embeds.map(e => e.toJSON());
+  };
+  await backfillAnalysis(h.channel, 'bot', [], h.data, h.save);
+  assert.equal(edits, 1);
+  await backfillAnalysis(h.channel, 'bot', [], h.data, h.save);
+  assert.equal(edits, 1);
 });
