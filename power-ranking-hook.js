@@ -33,6 +33,7 @@ const MAX_SESSION_MS = 12 * 60 * 60 * 1000;
 const PLAYER_PAGE_SIZE = 20;
 const pendingClubSearches = new Map();
 const pendingPlayerSelections = new Map();
+const pendingAdminPlayerSelections = new Map();
 let captureRunning = false;
 let refreshRunning = false;
 let weeklyRunning = false;
@@ -527,11 +528,11 @@ function paginatePlayers(players, requestedPage = 0) {
   };
 }
 
-function playerSelectionPayload(players, requestedPage = 0) {
+function playerSelectionPayload(players, requestedPage = 0, prefix = 'pr_player') {
   const result = paginatePlayers(players, requestedPage);
   const select = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId('pr_player_select')
+      .setCustomId(`${prefix}_select`)
       .setPlaceholder(`EA-Profil auswählen · Seite ${result.page + 1}/${result.pageCount}`)
       .addOptions(result.items.map((player, index) => ({
         label: player.playerName.slice(0, 100),
@@ -540,13 +541,13 @@ function playerSelectionPayload(players, requestedPage = 0) {
   );
   const navigation = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('pr_player_previous')
+      .setCustomId(`${prefix}_previous`)
       .setLabel('Zurück')
       .setEmoji('⬅️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(result.page === 0),
     new ButtonBuilder()
-      .setCustomId('pr_player_next')
+      .setCustomId(`${prefix}_next`)
       .setLabel('Weiter')
       .setEmoji('➡️')
       .setStyle(ButtonStyle.Secondary)
@@ -661,27 +662,9 @@ async function closeRankingWeek(client, guild) {
   await ensureRanking(client, guild);
 }
 
-function manualEaModal(targetId) {
-  return new ModalBuilder().setCustomId(`pr_admin_link_modal:${targetId}`).setTitle('EA-Profil manuell zuweisen')
-    .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder()
-      .setCustomId('ea_profile').setLabel('EA-ID / exakter EA-Spielername')
-      .setPlaceholder('Zum Beispiel Choco2206 (keine Club-ID)')
-      .setRequired(true).setMaxLength(64).setStyle(TextInputStyle.Short)));
-}
-
-function resolveManualProfile(input, members, recent) {
-  const query = normalizePlayerName(input);
-  if (!query) throw new Error('Bitte einen EA-Spielernamen oder eine Spieler-ID eingeben.');
-  const candidates = new Map();
-  for (const p of [...mergeClubMembersWithRecentIds(members, recent), ...recent]) {
-    if (normalizePlayerName(p.playerName) !== query && String(p.playerId || '') !== String(input).trim()) continue;
-    const key = p.playerId ? `id:${p.playerId}` : `name:${normalizePlayerName(p.playerName)}`;
-    candidates.set(key, p);
-  }
-  // A membership-only name and its ID-backed recent match row are the same candidate.
-  for (const [key, p] of candidates) if (!p.playerId && [...candidates.values()].some(v => v.playerId && normalizePlayerName(v.playerName) === normalizePlayerName(p.playerName))) candidates.delete(key);
-  if (candidates.size !== 1) throw new Error(candidates.size ? 'Der EA-Name ist nicht eindeutig. Bitte die numerische EA-Spieler-ID verwenden.' : 'Dieses EA-Profil wurde in der Mitgliederliste oder den verfügbaren Friendly Matches des verbundenen Clubs nicht gefunden. Prüfe den exakten EA-Namen.');
-  return [...candidates.values()][0];
+function adminPlayerSelectionPayload(selection) {
+  const p = playerSelectionPayload(selection.players, selection.page, 'pr_admin_player');
+  return { ...p, content: `EA-Club **${selection.clubName}** · ID **${selection.clubId}**\nWähle das EA-Profil für <@${selection.targetId}> aus. **Seite ${p.page + 1}**`, allowedMentions: { parse: [] } };
 }
 
 function assignManualProfile(data, targetId, player, adminId, expectedClubId) {
@@ -706,25 +689,45 @@ async function handleInteraction(interaction, client) {
     }
     if (interaction.isUserSelectMenu() && id === 'pr_admin_link_user') {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
+      await interaction.deferUpdate();
       const target = await interaction.guild.members.fetch(interaction.values[0]);
-      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Bitte ein Mitglied mit der Loco-Squad-Rolle auswählen.', flags: MessageFlags.Ephemeral });
-      return interaction.showModal(manualEaModal(target.id));
-    }
-    if (interaction.isModalSubmit() && id.startsWith('pr_admin_link_modal:')) {
-      if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const targetId = id.split(':')[1];
-      const target = await interaction.guild.members.fetch(targetId);
-      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply('Dieser Spieler hat keine Loco-Squad-Rolle mehr.');
+      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply({ content: 'Bitte ein Mitglied mit der Loco-Squad-Rolle auswählen.', components: [] });
       const data = store.load();
-      if (!data.club) return interaction.editReply('Der EA-Club wurde noch nicht eingerichtet.');
+      if (!data.club) return interaction.editReply({ content: 'Der EA-Club wurde noch nicht eingerichtet.', components: [] });
       const result = await Promise.allSettled([getClubMembers(data.club.clubId, data.club.platform), getFriendlyMatches(data.club.clubId, data.club.platform, 50)]);
-      if (result.every(r => r.status === 'rejected')) throw new Error('EA ist derzeit nicht erreichbar. Es wurde nichts geändert.');
-      const members = result[0].status === 'fulfilled' ? result[0].value : [];
+      if (result[0].status !== 'fulfilled') throw new Error('Die EA-Clubmitglieder konnten nicht geladen werden. Bitte erneut versuchen.');
       const recent = result[1].status === 'fulfilled' ? availablePlayers(result[1].value, data.club.clubId) : [];
-      const player = resolveManualProfile(interaction.fields.getTextInputValue('ea_profile'), members, recent);
-      store.update(next => assignManualProfile(next, targetId, player, interaction.user.id, data.club.clubId));
-      await interaction.editReply({ content: `✅ <@${targetId}> ist jetzt mit **${player.playerName}** verbunden. Ranking und Spieler-Formkurve verwenden diese Zuordnung. Die Formkurve wird spätestens bei der nächsten Zehn-Minuten-Prüfung aktualisiert.`, allowedMentions: { parse: [] } });
+      const players = mergeClubMembersWithRecentIds(result[0].value, recent).filter(player => !Object.entries(data.links).some(([discordId, link]) => discordId !== target.id && (
+        (player.playerId && link.playerId && String(player.playerId) === String(link.playerId))
+        || normalizePlayerName(player.playerName) === normalizePlayerName(link.playerName))));
+      if (!players.length) return interaction.editReply({ content: 'Keine freien EA-Profile in der Mitgliederliste des verbundenen Clubs gefunden.', components: [] });
+      const selection = { players, page: 0, targetId: target.id, clubId: String(data.club.clubId), clubName: data.club.name, guildId: interaction.guild.id, expiresAt: Date.now() + 10 * 60 * 1000 };
+      pendingAdminPlayerSelections.set(interaction.user.id, selection);
+      const p = adminPlayerSelectionPayload(selection); selection.page = p.page;
+      return interaction.editReply({ content: p.content, components: p.components, allowedMentions: p.allowedMentions });
+    }
+    if ((interaction.isButton() && ['pr_admin_player_previous', 'pr_admin_player_next'].includes(id))
+      || (interaction.isStringSelectMenu() && id === 'pr_admin_player_select')) {
+      if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
+      const selection = pendingAdminPlayerSelections.get(interaction.user.id);
+      if (!selection || selection.expiresAt < Date.now() || selection.guildId !== interaction.guild.id) {
+        pendingAdminPlayerSelections.delete(interaction.user.id);
+        return interaction.update({ content: 'Die EA-Auswahl ist abgelaufen. Bitte erneut über EA-ID zuweisen starten.', components: [] });
+      }
+      if (interaction.isButton()) {
+        selection.page += id === 'pr_admin_player_next' ? 1 : -1;
+        const p = adminPlayerSelectionPayload(selection); selection.page = p.page;
+        return interaction.update({ content: p.content, components: p.components, allowedMentions: p.allowedMentions });
+      }
+      const index = Number(interaction.values[0]);
+      const player = Number.isInteger(index) && index >= 0 ? selection.players[index] : null;
+      if (!player) return interaction.update({ content: 'Dieses EA-Profil konnte nicht zugeordnet werden. Bitte erneut starten.', components: [] });
+      await interaction.deferUpdate();
+      const target = await interaction.guild.members.fetch(selection.targetId);
+      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply({ content: 'Dieser Spieler hat keine Loco-Squad-Rolle mehr.', components: [] });
+      store.update(next => assignManualProfile(next, selection.targetId, player, interaction.user.id, selection.clubId));
+      pendingAdminPlayerSelections.delete(interaction.user.id);
+      await interaction.editReply({ content: `✅ <@${selection.targetId}> ist jetzt mit **${player.playerName}** verbunden. Ranking und Formkurve verwenden diese Zuordnung.`, components: [], allowedMentions: { parse: [] } });
       await refreshPanels(client, interaction.guild);
       return;
     }
@@ -958,7 +961,7 @@ module.exports = function installPowerRankingHook() {
 };
 
 module.exports._test = {
-  adminButtons, manualEaModal, resolveManualProfile, assignManualProfile, handleInteraction,
+  adminButtons, adminPlayerSelectionPayload, assignManualProfile, handleInteraction,
   aggregateRanking,
   availablePlayers,
   matchTimestamp,

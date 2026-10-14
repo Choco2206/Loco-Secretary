@@ -16,8 +16,8 @@ Bei einem EA-Ausfall bleiben gespeicherte Werte erhalten. Als Zeitstempel ersche
 
 Prüfung: `npm test`. Logs haben Präfix `[player-form]`.
 
-## Manuelle EA-Zuordnung durch die Teamleitung
+## EA-Zuordnung durch die Teamleitung
 
-Das Admin-Panel des Power-Rankings enthält „EA-ID zuweisen“. Teamleitung wählt ein Discord-Mitglied mit Loco-Squad-Rolle aus und gibt dessen exakten EA-Spielernamen oder numerische EA-Spieler-ID ein, keine Club-ID. Das Profil wird gegen Clubmitglieder und verfügbare Friendly Matches des im Ranking verbundenen Clubs geprüft. Wenn eine der beiden EA-Abfragen ausfällt, kann die andere Quelle verwendet werden. Bei komplettem Ausfall, nicht gefundenem oder mehrdeutigem Profil wird nichts gespeichert.
+Im Admin-Panel „EA-ID zuweisen“ wählen: zuerst Discord-Mitglied mit Loco-Squad-Rolle, anschließend dessen EA-Profil aus der automatisch geladenen Mitgliederliste des verbundenen EA-Clubs. Keine Namenseingabe. Die vollständige Mitgliederliste wird auf Seiten mit jeweils 20 Profilen angezeigt. Spieler-IDs werden soweit verfügbar aus den aktuellen Friendly Matches ergänzt. Ist ein Mitglied dort noch nicht vertreten, bleibt die eindeutige Namenszuordnung nutzbar.
 
-Die bestehende Zuordnung des ausgewählten Mitglieds wird ersetzt. Bereits anderen Mitgliedern zugewiesene Spieler-IDs oder Namen werden abgewiesen, auch bei älteren Clubverknüpfungen. Admin-Berechtigung wird an jedem Schritt geprüft. Gespeichert werden dieselben Felder wie bei der Selbstverknüpfung plus zuweisende Admin-ID und Quelle `admin_manual`. Das Ranking wird sofort aktualisiert; die Formkurve übernimmt den Link bei ihrer nächsten Zehn-Minuten-Prüfung.
+Anderen Spielern zugewiesene Profile werden aus der Auswahl entfernt und beim Speichern nochmals geprüft. Eine vorhandene Zuordnung des ausgewählten Spielers wird ersetzt. Berechtigungen, aktuelle Loco-Rolle und unveränderte Club-ID werden vor dem Speichern geprüft. Die Auswahl ist zehn Minuten gültig und gehört zum ausführenden Admin und Server. Die Mitgliederliste muss erfolgreich geladen werden; vergangene Spielteilnehmer werden nicht als aktuelle Clubmitglieder ausgegeben. Ranking und Formkurve verwenden dieselbe gespeicherte Verknüpfung.
