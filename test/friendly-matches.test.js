@@ -103,7 +103,7 @@ test('renderer creates three PNG attachments and valid Discord embed sizes witho
   assert.equal(payload.embeds[0].toJSON().image.url, 'attachment://ergebnis.png');
   assert.equal(payload.embeds[0].toJSON().fields, undefined);
   assert.equal(payload.embeds[1].toJSON().image, undefined);
-  assert.equal(payload.files.length, 3); assert.equal(payload.embeds.length, 4);
+  assert.equal(payload.files.length, 3); assert.equal(payload.embeds.length, 5);
   assert.equal(payload.embeds[1].toJSON().footer.text, marker(parsed.id));
   assert.ok(payload.files.every(f => f.attachment.length < 8 * 1024 * 1024));
   const json = payload.embeds.map(e => e.toJSON());

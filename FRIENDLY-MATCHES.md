@@ -4,12 +4,13 @@ Der normale Start mit `npm start` aktiviert den Feed für EA-Club **18360** (Loc
 
 Der Bot prüft täglich von **20:00 bis 04:00 Uhr Europe/Berlin** alle zehn Minuten, mit einer Abschlussprüfung um 04:00. Sommer- und Winterzeit werden automatisch berücksichtigt. Es werden alle neuen verfügbaren Freundschaftsspiele aus diesem Abend chronologisch veröffentlicht, nicht nur das jeweils letzte Spiel. Beim Start während des Zeitfensters werden die verfügbaren Spiele seit 20 Uhr nachgeholt. Ältere Abende und Spiele außerhalb des Zeitfensters werden nicht veröffentlicht.
 
-Jedes Match bekommt eine Nachricht mit vier Embeds:
+Jedes Match bekommt eine Nachricht mit fünf Embeds:
 
 1. Ergebnisgrafik ganz oben: Loco-Logo links, Endergebnis mittig, Gegnerlogo rechts.
 2. Darunter Torschützen, Vorlagen, offizieller EA-Man-of-the-Match und Teamwerte (Schüsse, Passquote, durchschnittliches Rating, Tackle-Quote, erfolgreiche Pässe, Paraden).
 3. Spielertabelle Loco Squad mit kleinem Teamlogo mit Position, Rating, Toren, Assists, erfolgreichen/versuchten Pässen und Passquote.
 4. Gleiche Tabelle für den Gegner, ebenfalls mit kleinem Teamlogo.
+5. Matchanalyse für Loco Squad: Mittelfeldaufbau, Abschlussausbeute, Defensive und Torwart, jeweils mit konkreten Zahlen und einer begrenzten Einordnung dieses Spiels.
 
 Logos stammen aus den EA-Wappen-Assets. Wenn EA kein passendes Bild liefert, zeigt die Grafik die Teaminitialen. Fehlende Werte erscheinen als „–“. Teamquoten werden aus den summierten Spielerwerten berechnet, nicht als Durchschnitt der individuellen Quoten. Spielzeit entspricht dem längsten von EA gelieferten `secondsPlayed`/`gameTime`-Wert, auf Minuten gerundet. MOTM wird ausschließlich anhand der EA-Markierung angezeigt.
 
@@ -34,3 +35,9 @@ Die geprüften EA-Matchantworten liefern `pos` nur als `goalkeeper`, `defender`,
 Die maximale positive Spielzeit der Spieler wird in Grafik und Statistiktext in gerundeten Ingame-Minuten angezeigt. Kurze Einsatzzeiten einzelner Spieler markieren ein durchgespieltes Match nicht als Abbruch. Wenn die maximale Spielzeit unter 90 Minuten liegt, erscheint „Vorzeitig beendet nach ca. … · EA-Wertung …“. Ein gesetztes `winnerByDnf` erzeugt „Abbruch von EA gemeldet“, auch bei 90 oder mehr Minuten. Fehlen positive Spielzeitwerte, wird keine Dauer oder vorzeitige Beendigung erfunden.
 
 Das ist eine Erkennung anhand der gelieferten Daten, keine sichere Aussage über Quit, Verbindungsabbruch oder andere Ursachen. Der Stand beim Abbruch wird nicht aus den individuellen Torschützen rekonstruiert, weil beispielsweise Eigentore und Wertungstore dabei fehlen können. Das von EA gelieferte Ergebnis bleibt maßgeblich.
+
+## Matchanalyse
+
+Der Analyse-Embed steht hinter der Gegner-Spielertabelle. Er verwendet ausschließlich das jeweilige Match, keinen historischen Vergleich. Die Texte sind aus Zahlen abgeleitete feste Regeln, keine erfundenen Beobachtungen von Spielszenen. Beim Mittelfeld werden erfolgreiche und versuchte Pässe summiert. Unter 75 % wird auf mindestens jeden vierten nicht angekommenen Pass hingewiesen; ab 90 % auf hohe reine Passsicherheit. Diese Einordnung belegt keine Progression oder Kreativität. Abschlussausbeute ist Teamtore/Schüsse. Wenn Teamtore, Spielertore und Schüsse nicht zusammenpassen, wird keine Ausbeute bewertet. Chancequalität oder xG liefert der geprüfte Abruf nicht.
+
+Defensive Einordnung nutzt Gegenabschlüsse, Gegentore und erfolgreiche Tacklingversuche aller eigenen Spieler. Die Verteidigung wird nicht pauschal für Team-Gegentore verantwortlich gemacht. Torwarttexte unterscheiden fehlende Keeper, volle oder kurze Einsatzzeit und mehrere Keeper. Gegentore werden bei unklarer Einsatzzeit nicht einem Spieler zugeordnet. Es wird keine vermeintliche Fangquote aus allen gegnerischen Schüssen berechnet. Abbruchspiele und Spiele ohne positive Dauer bekommen einen Hinweis statt normaler Leistungsbewertung.

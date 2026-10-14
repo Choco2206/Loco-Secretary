@@ -3,10 +3,11 @@ const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { POSITIONS, percent } = require('./model');
+const { buildAnalysis } = require('./analysis');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
-const LAYOUT_VERSION = 3;
+const LAYOUT_VERSION = 4;
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
 function text(ctx, value, x, y, size = 20, color = '#ecedf0', width = 900, align = 'left') {
@@ -130,7 +131,8 @@ async function buildPayload(match, logos) {
   return {
     embeds: [new EmbedBuilder().setColor(summary.data.color).setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` }), summary,
       new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
-      new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png')],
+      new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png'),
+      buildAnalysis(match)],
     files: [new AttachmentBuilder(score, { name: 'ergebnis.png' }), new AttachmentBuilder(own, { name: 'loco-squad.png' }), new AttachmentBuilder(opponent, { name: 'gegner.png' })],
     allowedMentions: { parse: [] },
   };
