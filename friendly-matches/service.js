@@ -2,7 +2,7 @@
 const { isActive, localParts, POLL_MS, candidates, parseMatch, CLUB_ID, CHANNEL_ID, PLATFORM } = require('./model');
 const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
-const { buildPayload } = require('./renderer');
+const { buildPayload, LAYOUT_VERSION } = require('./renderer');
 const previewRequest = require('./preview-request.json');
 
 // Discord history is also checked, covering a restart after send() but before the local save.
@@ -19,7 +19,10 @@ async function recoverPosted(channel, botId, now) {
       if (message.author?.id !== botId) continue;
       for (const embed of message.embeds || []) {
         const match = /^Friendly Match · (.+)$/.exec(embed.footer?.text || '');
-        if (match) posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString() };
+        if (match) {
+          const layout = (message.embeds || []).map(e => /^Friendly Layout · (\d+)$/.exec(e.footer?.text || '')).find(Boolean);
+          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: layout ? Number(layout[1]) : 1 };
+        }
       }
     }
     if (messages.size < 100 || oldestMessage.createdTimestamp < oldest) return posted;
@@ -54,6 +57,20 @@ function createService(client, options = {}) {
         Object.assign(data.posted, recovered);
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         const matches = candidates(raw, now, data.posted);
+        const refresh = deps.previewRequest;
+        const existing = refresh && data.posted[refresh.matchId];
+        if (refresh?.refreshLayoutVersion && existing && existing.layoutVersion !== refresh.refreshLayoutVersion
+          && now.getTime() < new Date(refresh.expiresAt).getTime()) {
+          const preview = raw.map(parseMatch).find(match => match?.id === refresh.matchId);
+          if (preview) {
+            const message = await channel.messages.fetch(existing.messageId);
+            if (message.author?.id !== client.user.id) throw new Error('Vorschau-Nachricht gehört nicht diesem Bot.');
+            await message.edit({ ...await deps.buildPayload(preview), attachments: [] });
+            existing.layoutVersion = refresh.refreshLayoutVersion;
+            deps.save(data);
+            console.log(`[friendly-matches] Vorschau ${preview.id} auf Layout ${existing.layoutVersion} aktualisiert.`);
+          }
+        }
         // A short-lived, explicitly requested preview may bypass the evening filter once.
         // It uses the normal match marker, so Discord recovery also prevents replay after redeploy.
         const request = deps.previewRequest;
@@ -71,7 +88,7 @@ function createService(client, options = {}) {
         deps.save(data);
         for (const match of matches) {
           const message = await channel.send(await deps.buildPayload(match));
-          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp };
+          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
         }

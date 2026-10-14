@@ -4,11 +4,12 @@ Der normale Start mit `npm start` aktiviert den Feed für EA-Club **18360** (Loc
 
 Der Bot prüft täglich von **20:00 bis 04:00 Uhr Europe/Berlin** alle zehn Minuten, mit einer Abschlussprüfung um 04:00. Sommer- und Winterzeit werden automatisch berücksichtigt. Es werden alle neuen verfügbaren Freundschaftsspiele aus diesem Abend chronologisch veröffentlicht, nicht nur das jeweils letzte Spiel. Beim Start während des Zeitfensters werden die verfügbaren Spiele seit 20 Uhr nachgeholt. Ältere Abende und Spiele außerhalb des Zeitfensters werden nicht veröffentlicht.
 
-Jedes Match bekommt eine Nachricht mit drei Embeds:
+Jedes Match bekommt eine Nachricht mit vier Embeds:
 
-1. Ergebnisgrafik: Loco-Logo links, Endergebnis mittig, Gegnerlogo rechts. Darunter Torschützen, Vorlagen, offizieller EA-Man-of-the-Match und Teamwerte (Schüsse, Passquote, durchschnittliches Rating, Tackle-Quote, erfolgreiche Pässe, Paraden).
-2. Spielertabelle Loco Squad mit Position, Rating, Toren, Assists, erfolgreichen/versuchten Pässen und Passquote.
-3. Gleiche Tabelle für den Gegner.
+1. Ergebnisgrafik ganz oben: Loco-Logo links, Endergebnis mittig, Gegnerlogo rechts.
+2. Darunter Torschützen, Vorlagen, offizieller EA-Man-of-the-Match und Teamwerte (Schüsse, Passquote, durchschnittliches Rating, Tackle-Quote, erfolgreiche Pässe, Paraden).
+3. Spielertabelle Loco Squad mit kleinem Teamlogo mit Position, Rating, Toren, Assists, erfolgreichen/versuchten Pässen und Passquote.
+4. Gleiche Tabelle für den Gegner, ebenfalls mit kleinem Teamlogo.
 
 Logos stammen aus den EA-Wappen-Assets. Wenn EA kein passendes Bild liefert, zeigt die Grafik die Teaminitialen. Fehlende Werte erscheinen als „–“. Teamquoten werden aus den summierten Spielerwerten berechnet, nicht als Durchschnitt der individuellen Quoten. Spielzeit entspricht dem längsten von EA gelieferten `secondsPlayed`/`gameTime`-Wert, auf Minuten gerundet. MOTM wird ausschließlich anhand der EA-Markierung angezeigt.
 
@@ -23,3 +24,7 @@ Prüfen: `npm test`. Ein Vorschau-Rendering wird mit echten EA-Response-Struktur
 ## Einmalige Vorschau vom 14.10.2026
 
 Auf Nutzerwunsch wird Match `99102133640243` (Loco Squad 0:4 TSG Purion) einmal außerhalb des Abendfilters berücksichtigt. Der kurzlebige Auftrag in `friendly-matches/preview-request.json` läuft am 14.10.2026 um 22:30 Uhr deutscher Zeit automatisch aus. Normale Match-ID-Speicherung und Discord-Verlaufsabgleich verhindern doppelte Posts. Danach bleibt ausschließlich der normale Zeitplan aktiv.
+
+Layout 2 setzt das Ergebnisbild in ein eigenes erstes Embed, damit Discord es vor den Statistikfeldern zeigt. Die bereits veröffentlichte einmalige Vorschau wird vor Ablauf des Vorschauauftrags bearbeitet, ohne ein weiteres Match zu posten.
+
+Die geprüften EA-Matchantworten liefern `pos` nur als `goalkeeper`, `defender`, `midfielder` oder `forward`. Formation und exakte Slots wie RM, RDM oder LS sind darin nicht enthalten. Die Anzeige bleibt daher TW/ABW/MIT/ANG; aus der Anzahl der Spieler oder deren Archetypen wird keine Formation geraten.

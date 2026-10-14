@@ -6,6 +6,7 @@ const { POSITIONS, percent } = require('./model');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
+const LAYOUT_VERSION = 2;
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
 function text(ctx, value, x, y, size = 20, color = '#ecedf0', width = 900, align = 'left') {
@@ -60,9 +61,16 @@ async function renderScore(match, logos) {
   text(ctx, `${date}${match.minutes === null ? '' : ` · Spieldauer ${match.minutes}′`}`, 500, 281, 15, '#9ca7b5', 800, 'center');
   return canvas.toBuffer('image/png');
 }
-function renderTable(team) {
+function renderTable(team, logo = null) {
   const { canvas, ctx } = panel(1200, 146 + Math.max(1, team.players.length) * 42);
-  text(ctx, team.name.toUpperCase(), 48, 54, 22);
+  if (logo) {
+    const scale = Math.min(38 / logo.width, 38 / logo.height);
+    ctx.drawImage(logo, 67 - logo.width * scale / 2, 54 - logo.height * scale / 2, logo.width * scale, logo.height * scale);
+  } else {
+    ctx.fillStyle = '#252c35'; ctx.beginPath(); ctx.arc(67, 54, 19, 0, Math.PI * 2); ctx.fill();
+    text(ctx, team.name.split(/\s+/).map(s => s[0]).slice(0, 2).join(''), 67, 54, 13, '#ecedf0', 33, 'center');
+  }
+  text(ctx, team.name.toUpperCase(), 102, 54, 22, '#ecedf0', 1040);
   const xs = [48, 565, 697, 795, 895, 1030, 1146];
   ['Spieler', 'Pos', 'Rating', 'Tore', 'Assists', 'Pässe', 'Pass %'].forEach((h, i) => text(ctx, h, xs[i], 91, 16, '#9ca7b5', i ? 100 : 440, i ? 'right' : 'left'));
   for (let i = 0; i < Math.max(1, team.players.length); i++) {
@@ -92,25 +100,28 @@ function scorers(team) {
   return (lines.join('\n') || 'Keine Tore oder Vorlagen').slice(0, 1024);
 }
 async function buildPayload(match, logos) {
-  const [score, own, opponent] = await Promise.all([renderScore(match, logos), Promise.resolve(renderTable(match.own)), Promise.resolve(renderTable(match.opponent))]);
+  const images = logos || await Promise.all([fetchLogo(match.own), fetchLogo(match.opponent)]);
+  const score = await renderScore(match, images);
+  const own = renderTable(match.own, images[0]);
+  const opponent = renderTable(match.opponent, images[1]);
   const a = match.own; const b = match.opponent;
   const pair = (key, digits = 0, suffix = '') => `${display(a[key], digits)}${a[key] === null ? '' : suffix} : ${display(b[key], digits)}${b[key] === null ? '' : suffix}`;
   const motm = [a, b].flatMap(t => t.players.filter(p => p.motm).map(p => `${escape(p.name)} · ${display(p.rating, 1)}\n${escape(t.name)}`)).join('\n') || 'Von EA nicht ausgewiesen';
   const summary = new EmbedBuilder().setColor(a.goals > b.goals ? 0x42e789 : a.goals < b.goals ? 0xff9338 : 0x9ca7b5)
     .setTitle(`${a.name} ${a.goals} : ${b.goals} ${b.name}`.slice(0, 256))
     .setDescription('Freundschaftsspiel · Werte links: Loco Squad · rechts: Gegner')
-    .setImage('attachment://ergebnis.png').setTimestamp(new Date(match.timestamp)).setFooter({ text: marker(match.id) })
+    .setTimestamp(new Date(match.timestamp)).setFooter({ text: marker(match.id) })
     .addFields(
       { name: `⚽ ${a.name}`.slice(0, 256), value: scorers(a), inline: true },
       { name: `⚽ ${b.name}`.slice(0, 256), value: scorers(b), inline: true },
       { name: 'Man of the Match', value: motm.slice(0, 1024) },
       ...[['Schüsse', 'shots'], ['Passquote', 'passPercent', 0, ' %'], ['Ø Rating', 'averageRating', 1], ['Tackle-Quote', 'tacklePercent', 0, ' %'], ['Pässe angekommen', 'passes'], ['Paraden', 'saves']].map(([name, key, digits, suffix]) => ({ name, value: pair(key, digits, suffix), inline: true })));
   return {
-    embeds: [summary,
+    embeds: [new EmbedBuilder().setColor(summary.data.color).setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` }), summary,
       new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
       new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png')],
     files: [new AttachmentBuilder(score, { name: 'ergebnis.png' }), new AttachmentBuilder(own, { name: 'loco-squad.png' }), new AttachmentBuilder(opponent, { name: 'gegner.png' })],
     allowedMentions: { parse: [] },
   };
 }
-module.exports = { renderScore, renderTable, buildPayload, marker };
+module.exports = { renderScore, renderTable, buildPayload, marker, LAYOUT_VERSION };
