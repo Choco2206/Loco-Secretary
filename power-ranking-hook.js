@@ -189,6 +189,7 @@ function adminButtons(active) {
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('pr_manage_matches').setLabel('Spiele verwalten').setEmoji('📋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('pr_admin_link').setLabel('EA-ID zuweisen').setEmoji('🎮').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('pr_unlink_player').setLabel('EA-Link löschen').setEmoji('🔗').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('pr_refresh').setLabel('Übersicht aktualisieren').setStyle(ButtonStyle.Secondary),
     ),
@@ -660,11 +661,73 @@ async function closeRankingWeek(client, guild) {
   await ensureRanking(client, guild);
 }
 
+function manualEaModal(targetId) {
+  return new ModalBuilder().setCustomId(`pr_admin_link_modal:${targetId}`).setTitle('EA-Profil manuell zuweisen')
+    .addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder()
+      .setCustomId('ea_profile').setLabel('EA-ID / exakter EA-Spielername')
+      .setPlaceholder('Zum Beispiel Choco2206 (keine Club-ID)')
+      .setRequired(true).setMaxLength(64).setStyle(TextInputStyle.Short)));
+}
+
+function resolveManualProfile(input, members, recent) {
+  const query = normalizePlayerName(input);
+  if (!query) throw new Error('Bitte einen EA-Spielernamen oder eine Spieler-ID eingeben.');
+  const candidates = new Map();
+  for (const p of [...mergeClubMembersWithRecentIds(members, recent), ...recent]) {
+    if (normalizePlayerName(p.playerName) !== query && String(p.playerId || '') !== String(input).trim()) continue;
+    const key = p.playerId ? `id:${p.playerId}` : `name:${normalizePlayerName(p.playerName)}`;
+    candidates.set(key, p);
+  }
+  // A membership-only name and its ID-backed recent match row are the same candidate.
+  for (const [key, p] of candidates) if (!p.playerId && [...candidates.values()].some(v => v.playerId && normalizePlayerName(v.playerName) === normalizePlayerName(p.playerName))) candidates.delete(key);
+  if (candidates.size !== 1) throw new Error(candidates.size ? 'Der EA-Name ist nicht eindeutig. Bitte die numerische EA-Spieler-ID verwenden.' : 'Dieses EA-Profil wurde in der Mitgliederliste oder den verfügbaren Friendly Matches des verbundenen Clubs nicht gefunden. Prüfe den exakten EA-Namen.');
+  return [...candidates.values()][0];
+}
+
+function assignManualProfile(data, targetId, player, adminId, expectedClubId) {
+  if (String(data.club?.clubId) !== String(expectedClubId)) throw new Error('Der verbundene Club wurde inzwischen geändert. Bitte erneut zuweisen.');
+  const claimed = Object.entries(data.links).find(([id, link]) => id !== targetId && (
+    (player.playerId && link.playerId && String(player.playerId) === String(link.playerId))
+    || normalizePlayerName(player.playerName) === normalizePlayerName(link.playerName)));
+  if (claimed) throw new Error('Dieses EA-Profil ist bereits einem anderen Discord-Spieler zugewiesen. Löse zuerst dessen EA-Verknüpfung.');
+  data.links[targetId] = { ...player, clubId: String(data.club.clubId), linkedAt: new Date().toISOString(), linkedBy: adminId, source: 'admin_manual' };
+  return data;
+}
+
 async function handleInteraction(interaction, client) {
   const id = interaction.customId || '';
   if (!id.startsWith('pr_')) return;
 
   try {
+    if (interaction.isButton() && id === 'pr_admin_link') {
+      if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ content: 'Wähle den Loco-Spieler aus, dem du ein EA-Profil zuweisen möchtest. Eine vorhandene Zuordnung dieses Spielers wird ersetzt.',
+        components: [new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId('pr_admin_link_user').setPlaceholder('Loco-Spieler auswählen').setMinValues(1).setMaxValues(1))], flags: MessageFlags.Ephemeral });
+    }
+    if (interaction.isUserSelectMenu() && id === 'pr_admin_link_user') {
+      if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
+      const target = await interaction.guild.members.fetch(interaction.values[0]);
+      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Bitte ein Mitglied mit der Loco-Squad-Rolle auswählen.', flags: MessageFlags.Ephemeral });
+      return interaction.showModal(manualEaModal(target.id));
+    }
+    if (interaction.isModalSubmit() && id.startsWith('pr_admin_link_modal:')) {
+      if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      const targetId = id.split(':')[1];
+      const target = await interaction.guild.members.fetch(targetId);
+      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply('Dieser Spieler hat keine Loco-Squad-Rolle mehr.');
+      const data = store.load();
+      if (!data.club) return interaction.editReply('Der EA-Club wurde noch nicht eingerichtet.');
+      const result = await Promise.allSettled([getClubMembers(data.club.clubId, data.club.platform), getFriendlyMatches(data.club.clubId, data.club.platform, 50)]);
+      if (result.every(r => r.status === 'rejected')) throw new Error('EA ist derzeit nicht erreichbar. Es wurde nichts geändert.');
+      const members = result[0].status === 'fulfilled' ? result[0].value : [];
+      const recent = result[1].status === 'fulfilled' ? availablePlayers(result[1].value, data.club.clubId) : [];
+      const player = resolveManualProfile(interaction.fields.getTextInputValue('ea_profile'), members, recent);
+      store.update(next => assignManualProfile(next, targetId, player, interaction.user.id, data.club.clubId));
+      await interaction.editReply({ content: `✅ <@${targetId}> ist jetzt mit **${player.playerName}** verbunden. Ranking und Spieler-Formkurve verwenden diese Zuordnung. Die Formkurve wird spätestens bei der nächsten Zehn-Minuten-Prüfung aktualisiert.`, allowedMentions: { parse: [] } });
+      await refreshPanels(client, interaction.guild);
+      return;
+    }
     if (interaction.isButton() && id === 'pr_club_search') {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       return interaction.reply({ content: 'Wähle zuerst die Plattform des Clubs:', components: [platformMenu()], flags: MessageFlags.Ephemeral });
@@ -895,6 +958,7 @@ module.exports = function installPowerRankingHook() {
 };
 
 module.exports._test = {
+  adminButtons, manualEaModal, resolveManualProfile, assignManualProfile, handleInteraction,
   aggregateRanking,
   availablePlayers,
   matchTimestamp,

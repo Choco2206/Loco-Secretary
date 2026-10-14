@@ -15,3 +15,9 @@ Speicherung: `data/playerForm.json`, optional unter `DATA_DIR`. Dieser Ordner mu
 Bei einem EA-Ausfall bleiben gespeicherte Werte erhalten. Als Zeitstempel erscheint der letzte gültige Einsatz des Spielers, nicht eine vorgetäuschte frische Erfassung. Im Kanal sind die üblichen Rechte „Kanal ansehen“, „Nachrichtenverlauf anzeigen“, „Nachrichten senden“, „Links einbetten“ nötig. Der Bot braucht zum Rollenabgleich Zugriff auf die Mitgliederliste, wie die bestehenden Kader- und Rankingfunktionen.
 
 Prüfung: `npm test`. Logs haben Präfix `[player-form]`.
+
+## Manuelle EA-Zuordnung durch die Teamleitung
+
+Das Admin-Panel des Power-Rankings enthält „EA-ID zuweisen“. Teamleitung wählt ein Discord-Mitglied mit Loco-Squad-Rolle aus und gibt dessen exakten EA-Spielernamen oder numerische EA-Spieler-ID ein, keine Club-ID. Das Profil wird gegen Clubmitglieder und verfügbare Friendly Matches des im Ranking verbundenen Clubs geprüft. Wenn eine der beiden EA-Abfragen ausfällt, kann die andere Quelle verwendet werden. Bei komplettem Ausfall, nicht gefundenem oder mehrdeutigem Profil wird nichts gespeichert.
+
+Die bestehende Zuordnung des ausgewählten Mitglieds wird ersetzt. Bereits anderen Mitgliedern zugewiesene Spieler-IDs oder Namen werden abgewiesen, auch bei älteren Clubverknüpfungen. Admin-Berechtigung wird an jedem Schritt geprüft. Gespeichert werden dieselben Felder wie bei der Selbstverknüpfung plus zuweisende Admin-ID und Quelle `admin_manual`. Das Ranking wird sofort aktualisiert; die Formkurve übernimmt den Link bei ihrer nächsten Zehn-Minuten-Prüfung.
