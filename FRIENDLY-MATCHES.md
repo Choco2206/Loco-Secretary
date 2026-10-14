@@ -19,3 +19,7 @@ Doppelte Veröffentlichungen werden durch Match-IDs in `data/friendlyMatches.jso
 Der Bot braucht im Zielkanal „Kanal ansehen“, „Nachrichtenverlauf anzeigen“, „Nachrichten senden“, „Links einbetten“ und „Dateien anhängen“. Die Speicherdatei sollte auf einem persistenten Volume liegen. Optional setzt `DATA_DIR` den Speicherordner für diesen Feed. Es wird kein Discord-Token oder zusätzlicher API-Key benötigt, außer dem bereits konfigurierten Bot-Token.
 
 Prüfen: `npm test`. Ein Vorschau-Rendering wird mit echten EA-Response-Strukturen in den Tests geprüft. Nach einem Deployment lassen sich Aktivierung und neue Posts an den Logzeilen mit `[friendly-matches]` erkennen.
+
+## Einmalige Vorschau vom 14.10.2026
+
+Auf Nutzerwunsch wird Match `99102133640243` (Loco Squad 0:4 TSG Purion) einmal außerhalb des Abendfilters berücksichtigt. Der kurzlebige Auftrag in `friendly-matches/preview-request.json` läuft am 14.10.2026 um 22:30 Uhr deutscher Zeit automatisch aus. Normale Match-ID-Speicherung und Discord-Verlaufsabgleich verhindern doppelte Posts. Danach bleibt ausschließlich der normale Zeitplan aktiv.

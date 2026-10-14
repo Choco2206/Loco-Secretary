@@ -107,3 +107,18 @@ test('renderer creates three PNG attachments and valid Discord embed sizes witho
   assert.ok(JSON.stringify(json).length < 6000);
   assert.deepEqual(payload.allowedMentions, { parse: [] });
 });
+
+test('requested historical preview posts once, including across restart; expires without replay', async () => {
+  const request = { matchId: fixture.matchId, expiresAt: '2026-10-14T20:30:00Z' };
+  const h = harness({ previewRequest: request, fetchMatches: async () => [copy()] });
+  await h.service.tick(new Date('2026-10-14T18:30:00Z'));
+  assert.deepEqual(h.sends.map(x => x.id), [fixture.matchId]);
+  await h.service.tick(new Date('2026-10-14T18:40:00Z'));
+  assert.equal(h.sends.length, 1);
+  const restarted = harness({ previewRequest: request, fetchMatches: async () => [copy()], recover: async () => structuredClone(h.data.posted) });
+  await restarted.service.tick(new Date('2026-10-14T18:50:00Z'));
+  assert.equal(restarted.sends.length, 0);
+  const expired = harness({ previewRequest: request, fetchMatches: async () => [copy()] });
+  await expired.service.tick(new Date('2026-10-14T20:30:00Z'));
+  assert.equal(expired.sends.length, 0);
+});

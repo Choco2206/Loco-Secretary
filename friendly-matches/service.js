@@ -1,8 +1,9 @@
 'use strict';
-const { isActive, localParts, POLL_MS, candidates, CLUB_ID, CHANNEL_ID, PLATFORM } = require('./model');
+const { isActive, localParts, POLL_MS, candidates, parseMatch, CLUB_ID, CHANNEL_ID, PLATFORM } = require('./model');
 const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
 const { buildPayload } = require('./renderer');
+const previewRequest = require('./preview-request.json');
 
 // Discord history is also checked, covering a restart after send() but before the local save.
 async function recoverPosted(channel, botId, now) {
@@ -28,7 +29,7 @@ async function recoverPosted(channel, botId, now) {
 }
 function createService(client, options = {}) {
   const deps = {
-    load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload,
+    load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest,
     getChannel: () => client.channels.fetch(CHANNEL_ID),
     recover: (channel, now) => recoverPosted(channel, client.user.id, now),
     ...options,
@@ -53,6 +54,16 @@ function createService(client, options = {}) {
         Object.assign(data.posted, recovered);
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         const matches = candidates(raw, now, data.posted);
+        // A short-lived, explicitly requested preview may bypass the evening filter once.
+        // It uses the normal match marker, so Discord recovery also prevents replay after redeploy.
+        const request = deps.previewRequest;
+        if (request && now.getTime() < new Date(request.expiresAt).getTime() && !data.posted[request.matchId]) {
+          const preview = raw.map(parseMatch).find(match => match?.id === request.matchId);
+          if (preview && new Date(preview.timestamp) <= now && !matches.some(match => match.id === preview.id)) {
+            matches.push(preview);
+            matches.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+          }
+        }
         // Keep only the last 30 days of IDs; older matches are excluded by the session filter.
         for (const [id, entry] of Object.entries(data.posted)) {
           if (new Date(entry.postedAt).getTime() < now.getTime() - 30 * 86400000) delete data.posted[id];
