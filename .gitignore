@@ -1,3 +1,6 @@
 node_modules
 .env
 data/powerRanking.json
+
+data/friendlyMatches.json
+data/friendlyMatches.json.tmp
