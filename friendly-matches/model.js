@@ -53,6 +53,7 @@ function parseTeam(id, club, rawPlayers) {
     id: String(club.details?.clubId ?? club.clubId ?? id),
     name: String(club.details?.name ?? club.name ?? club.clubName ?? (String(id) === CLUB_ID ? 'Loco Squad' : 'Gegner')),
     goals: number(club.goals ?? club.score),
+    winnerByDnf: Number(club.winnerByDnf) > 0,
     crestIds: [...new Set([club.TEAM, club.details?.customKit?.crestAssetId, club.details?.teamId].filter(v => /^\d+$/.test(String(v))).map(String))],
     players, shots: sum(players, 'shots'), passes: sum(players, 'passes'),
     passPercent: percent(sum(players, 'passes'), sum(players, 'passAttempts')),
@@ -71,9 +72,11 @@ function parseMatch(raw) {
   if (entries.some(([, c]) => c.matchType !== undefined && !['5', 'friendlyMatch'].includes(String(c.matchType)))) return null;
   const teams = [own, opponent].map(([key, c]) => parseTeam(key, c, raw.players?.[key]));
   if (teams.some(t => t.goals === null || !t.players.length)) return null;
-  const seconds = teams.flatMap(t => t.players).map(p => p.secondsPlayed).filter(n => n !== null);
+  const seconds = teams.flatMap(t => t.players).map(p => p.secondsPlayed).filter(n => n !== null && n > 0);
+  const durationSeconds = seconds.length ? Math.max(...seconds) : null;
+  const termination = teams.some(t => t.winnerByDnf) ? 'dnf' : durationSeconds !== null && durationSeconds < 90 * 60 ? 'early' : null;
   return { id, timestamp: date.toISOString(), own: teams[0], opponent: teams[1],
-    minutes: seconds.length ? Math.round(Math.max(...seconds) / 60) : null };
+    durationSeconds, termination, minutes: durationSeconds === null ? null : Math.round(durationSeconds / 60) };
 }
 function candidates(rawMatches, now, posted = {}) {
   const result = new Map();

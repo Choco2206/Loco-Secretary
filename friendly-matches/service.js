@@ -59,14 +59,14 @@ function createService(client, options = {}) {
         const matches = candidates(raw, now, data.posted);
         const refresh = deps.previewRequest;
         const existing = refresh && data.posted[refresh.matchId];
-        if (refresh?.refreshLayoutVersion && existing && existing.layoutVersion !== refresh.refreshLayoutVersion
+        if (refresh?.refreshLayoutVersion && existing && (existing.layoutVersion || 1) < refresh.refreshLayoutVersion
           && now.getTime() < new Date(refresh.expiresAt).getTime()) {
           const preview = raw.map(parseMatch).find(match => match?.id === refresh.matchId);
           if (preview) {
             const message = await channel.messages.fetch(existing.messageId);
             if (message.author?.id !== client.user.id) throw new Error('Vorschau-Nachricht gehört nicht diesem Bot.');
             await message.edit({ ...await deps.buildPayload(preview), attachments: [] });
-            existing.layoutVersion = refresh.refreshLayoutVersion;
+            existing.layoutVersion = LAYOUT_VERSION;
             deps.save(data);
             console.log(`[friendly-matches] Vorschau ${preview.id} auf Layout ${existing.layoutVersion} aktualisiert.`);
           }

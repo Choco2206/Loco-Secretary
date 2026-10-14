@@ -28,3 +28,9 @@ Auf Nutzerwunsch wird Match `99102133640243` (Loco Squad 0:4 TSG Purion) einmal 
 Layout 2 setzt das Ergebnisbild in ein eigenes erstes Embed, damit Discord es vor den Statistikfeldern zeigt. Die bereits veröffentlichte einmalige Vorschau wird vor Ablauf des Vorschauauftrags bearbeitet, ohne ein weiteres Match zu posten.
 
 Die geprüften EA-Matchantworten liefern `pos` nur als `goalkeeper`, `defender`, `midfielder` oder `forward`. Formation und exakte Slots wie RM, RDM oder LS sind darin nicht enthalten. Die Anzeige bleibt daher TW/ABW/MIT/ANG; aus der Anzahl der Spieler oder deren Archetypen wird keine Formation geraten.
+
+## Spielzeit und vorzeitiges Ende
+
+Die maximale positive Spielzeit der Spieler wird in Grafik und Statistiktext in gerundeten Ingame-Minuten angezeigt. Kurze Einsatzzeiten einzelner Spieler markieren ein durchgespieltes Match nicht als Abbruch. Wenn die maximale Spielzeit unter 90 Minuten liegt, erscheint „Vorzeitig beendet nach ca. … · EA-Wertung …“. Ein gesetztes `winnerByDnf` erzeugt „Abbruch von EA gemeldet“, auch bei 90 oder mehr Minuten. Fehlen positive Spielzeitwerte, wird keine Dauer oder vorzeitige Beendigung erfunden.
+
+Das ist eine Erkennung anhand der gelieferten Daten, keine sichere Aussage über Quit, Verbindungsabbruch oder andere Ursachen. Der Stand beim Abbruch wird nicht aus den individuellen Torschützen rekonstruiert, weil beispielsweise Eigentore und Wertungstore dabei fehlen können. Das von EA gelieferte Ergebnis bleibt maßgeblich.

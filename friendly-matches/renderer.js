@@ -6,7 +6,7 @@ const { POSITIONS, percent } = require('./model');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
-const LAYOUT_VERSION = 2;
+const LAYOUT_VERSION = 3;
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
 function text(ctx, value, x, y, size = 20, color = '#ecedf0', width = 900, align = 'left') {
@@ -48,7 +48,7 @@ function drawLogo(ctx, image, team, x, y) {
   }
 }
 async function renderScore(match, logos) {
-  const { canvas, ctx } = panel(1000, 320);
+  const { canvas, ctx } = panel(1000, match.termination ? 365 : 320);
   const images = logos || await Promise.all([fetchLogo(match.own), fetchLogo(match.opponent)]);
   text(ctx, 'FRIENDLY MATCH', 500, 52, 16, '#9ca7b5', 400, 'center');
   drawLogo(ctx, images[0], match.own, 230, 145);
@@ -59,6 +59,7 @@ async function renderScore(match, logos) {
   text(ctx, match.opponent.name, 770, 237, 24, '#ecedf0', 350, 'center');
   const date = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(match.timestamp));
   text(ctx, `${date}${match.minutes === null ? '' : ` · Spieldauer ${match.minutes}′`}`, 500, 281, 15, '#9ca7b5', 800, 'center');
+  if (match.termination) text(ctx, terminationText(match, false), 500, 324, 18, '#ffd139', 900, 'center');
   return canvas.toBuffer('image/png');
 }
 function renderTable(team, logo = null) {
@@ -99,6 +100,12 @@ function scorers(team) {
   const lines = team.players.filter(p => p.goals > 0 || p.assists > 0).map(p => `${escape(p.name)}${p.goals > 0 ? ` · ⚽ ${p.goals}` : ''}${p.assists > 0 ? ` · 👟 ${p.assists}` : ''}`);
   return (lines.join('\n') || 'Keine Tore oder Vorlagen').slice(0, 1024);
 }
+function terminationText(match, emoji = true) {
+  if (!match.termination) return '';
+  const label = match.termination === 'dnf' ? 'Abbruch von EA gemeldet' : 'Vorzeitig beendet';
+  const duration = match.minutes === null ? '' : ` nach ca. ${match.minutes}′`;
+  return `${emoji ? '⚠️ ' : ''}${label}${duration} · EA-Wertung ${match.own.goals}:${match.opponent.goals}`;
+}
 async function buildPayload(match, logos) {
   const images = logos || await Promise.all([fetchLogo(match.own), fetchLogo(match.opponent)]);
   const score = await renderScore(match, images);
@@ -109,7 +116,11 @@ async function buildPayload(match, logos) {
   const motm = [a, b].flatMap(t => t.players.filter(p => p.motm).map(p => `${escape(p.name)} · ${display(p.rating, 1)}\n${escape(t.name)}`)).join('\n') || 'Von EA nicht ausgewiesen';
   const summary = new EmbedBuilder().setColor(a.goals > b.goals ? 0x42e789 : a.goals < b.goals ? 0xff9338 : 0x9ca7b5)
     .setTitle(`${a.name} ${a.goals} : ${b.goals} ${b.name}`.slice(0, 256))
-    .setDescription('Freundschaftsspiel · Werte links: Loco Squad · rechts: Gegner')
+    .setDescription([
+      `Freundschaftsspiel${match.minutes === null ? ' · Spieldauer nicht verfügbar' : ` · Spieldauer ca. ${match.minutes}′`}`,
+      terminationText(match),
+      'Werte links: Loco Squad · rechts: Gegner',
+    ].filter(Boolean).join('\n'))
     .setTimestamp(new Date(match.timestamp)).setFooter({ text: marker(match.id) })
     .addFields(
       { name: `⚽ ${a.name}`.slice(0, 256), value: scorers(a), inline: true },
@@ -124,4 +135,4 @@ async function buildPayload(match, logos) {
     allowedMentions: { parse: [] },
   };
 }
-module.exports = { renderScore, renderTable, buildPayload, marker, LAYOUT_VERSION };
+module.exports = { renderScore, renderTable, buildPayload, marker, LAYOUT_VERSION, terminationText };

@@ -133,7 +133,7 @@ test('existing preview is edited once to the new layout without sending another 
   const channel = { isTextBased: () => true, send: async () => { sends++; }, messages: {
     fetch: async id => {
       assert.equal(id, 'preview-message');
-      return { author: { id: 'bot' }, edit: async payload => { assert.deepEqual(payload.attachments, []); edits++; version = 2; } };
+      return { author: { id: 'bot' }, edit: async payload => { assert.deepEqual(payload.attachments, []); edits++; version = require('../friendly-matches/renderer').LAYOUT_VERSION; } };
     },
   } };
   const service = createService({ user: { id: 'bot' } }, {
@@ -144,5 +144,32 @@ test('existing preview is edited once to the new layout without sending another 
   await service.tick(new Date('2026-10-14T18:40:00Z'));
   await service.tick(new Date('2026-10-14T18:50:00Z'));
   assert.equal(edits, 1); assert.equal(sends, 0);
-  assert.equal(stored.posted[fixture.matchId].layoutVersion, 2);
+  assert.equal(stored.posted[fixture.matchId].layoutVersion, require('../friendly-matches/renderer').LAYOUT_VERSION);
+});
+
+test('five-minute termination is detected; individual early departures do not shorten full matches', () => {
+  const early = copy();
+  for (const ps of Object.values(early.players)) for (const p of Object.values(ps)) p.secondsPlayed = '300';
+  early.clubs['18360'].goals = '3'; early.clubs['107716'].goals = '0';
+  const parsed = parseMatch(early);
+  assert.equal(parsed.minutes, 5); assert.equal(parsed.termination, 'early');
+  const { terminationText } = require('../friendly-matches/renderer');
+  assert.equal(terminationText(parsed), '⚠️ Vorzeitig beendet nach ca. 5′ · EA-Wertung 3:0');
+  assert.ok(!terminationText(parsed).includes('Stand beim Abbruch'));
+  const full = copy(); Object.values(full.players['18360'])[0].secondsPlayed = '300';
+  assert.equal(parseMatch(full).termination, null); assert.equal(parseMatch(full).minutes, 92);
+  full.clubs['18360'].winnerByDnf = '1'; assert.equal(parseMatch(full).termination, 'dnf');
+  for (const ps of Object.values(full.players)) for (const p of Object.values(ps)) p.secondsPlayed = '0';
+  full.clubs['18360'].winnerByDnf = '0';
+  assert.equal(parseMatch(full).minutes, null); assert.equal(parseMatch(full).termination, null);
+});
+
+test('termination time and EA result appear in Discord description and image renders', async () => {
+  const early = copy();
+  for (const ps of Object.values(early.players)) for (const p of Object.values(ps)) p.secondsPlayed = '2777';
+  const payload = await buildPayload(parseMatch(early), [null, null]);
+  const description = payload.embeds[1].toJSON().description;
+  assert.match(description, /Spieldauer ca\. 46′/);
+  assert.match(description, /Vorzeitig beendet nach ca\. 46′/);
+  assert.match(description, /EA-Wertung 0:4/);
 });
