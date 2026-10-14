@@ -122,3 +122,42 @@ test('roster pagination filters bots and non-role members', async () => {
   const result = await members({ members: { list: async p => { calls.push(p); return calls.length === 1 ? first : second; } } });
   assert.deepEqual(result, [member]); assert.equal(calls[1].after, '999');
 });
+
+test('manual refresh immediately rereads a new link within the same polling slot without another EA request', async () => {
+  const links = {};
+  const h = harness({ ranking: () => ({ links }) });
+  const now = new Date('2026-10-15T00:00:00Z');
+  await h.service.tick(now);
+  assert.match(h.history.get(member.id).embeds[0].description, /noch nicht verknüpft/);
+  links[member.id] = link;
+  await h.service.refresh(new Date('2026-10-15T00:01:00Z'));
+  assert.equal(h.sent, 1); assert.equal(h.edited, 1); assert.equal(h.fetched, 1);
+  assert.equal(h.history.get(member.id).embeds[0].title, 'Choco2206');
+  delete links[member.id];
+  await h.service.refresh(new Date('2026-10-15T00:02:00Z'));
+  assert.match(h.history.get(member.id).embeds[0].description, /noch nicht verknüpft/);
+  assert.equal(h.fetched, 1);
+  await h.service.tick(new Date('2026-10-15T00:10:00Z')); assert.equal(h.fetched, 2);
+});
+
+test('refresh waits for an active publisher and does not drop the updated association', async () => {
+  const links = {}; let release; let entered;
+  const enteredPromise = new Promise(resolve => { entered = resolve; });
+  const pause = new Promise(resolve => { release = resolve; });
+  let once = true;
+  const originalPayload = require('../player-form/embed').payload;
+  const h = harness({ ranking: () => ({ links }), buildPayload: (m, l, d) => {
+    if (once) { once = false; entered(); }
+    return originalPayload(m, l, d);
+  } });
+  // Pause the send after the first run has read the old links.
+  const originalSend = h.deps.getChannel;
+  const channel = await originalSend(); const send = channel.send;
+  channel.send = async p => { await pause; return send(p); };
+  const running = h.service.tick(new Date('2026-10-15T00:00:00Z'));
+  await enteredPromise; links[member.id] = link;
+  const refresh = h.service.refresh(new Date('2026-10-15T00:01:00Z'));
+  release(); await Promise.all([running, refresh]);
+  assert.equal(h.sent, 1); assert.equal(h.edited, 1);
+  assert.equal(h.history.get(member.id).embeds[0].title, 'Choco2206');
+});

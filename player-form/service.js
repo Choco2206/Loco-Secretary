@@ -40,14 +40,22 @@ function createService(client, options = {}) {
     fetchMatches: getFriendlyMatches, getChannel: () => client.channels.fetch(CHANNEL_ID),
     members, recover, buildPayload: payload, ...options };
   let running = false; let lastSlot;
-  return { async tick(now = new Date()) {
+  let completion = Promise.resolve(); let finish;
+  return {
+    async refresh(now = new Date()) {
+      // A new assignment must not be dropped while the scheduled run is still publishing.
+      while (running) await completion;
+      return this.tick(now, true);
+    },
+    async tick(now = new Date(), forceRefresh = false) {
     const slot = Math.floor(now.getTime() / POLL_MS);
-    if (running || lastSlot === slot) return;
-    lastSlot = slot; running = true;
+    if (running || (!forceRefresh && lastSlot === slot)) return;
+    if (!forceRefresh) lastSlot = slot;
+    running = true; completion = new Promise(resolve => { finish = resolve; });
     try {
       const data = deps.load();
       const parts = localParts(now);
-      if (isActive(now) || (Number(parts.hour) === 4 && Number(parts.minute) === 0)) {
+      if (!forceRefresh && (isActive(now) || (Number(parts.hour) === 4 && Number(parts.minute) === 0))) {
         try { ingest(data, await deps.fetchMatches(CLUB_ID, PLATFORM, 50), now); deps.save(data); }
         catch (error) { console.error('[player-form] EA-Abfrage fehlgeschlagen, bestehende Werte bleiben erhalten:', error.message); }
       }
@@ -90,7 +98,7 @@ function createService(client, options = {}) {
         }
       }
       console.log(`[player-form] ${roster.length} Spieler-Embeds geprüft · ${Object.keys(data.matches).length} Friendly Matches gespeichert.`);
-    } finally { running = false; }
+    } finally { running = false; finish(); }
   } };
 }
 module.exports = { CHANNEL_ID, ROLE_ID, members, recover, createService, fingerprint };

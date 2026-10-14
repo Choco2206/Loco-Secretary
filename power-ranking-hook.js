@@ -677,6 +677,16 @@ function assignManualProfile(data, targetId, player, adminId, expectedClubId) {
   return data;
 }
 
+async function refreshPlayerForms(client) {
+  try {
+    await require('./player-form-hook').refresh(client);
+    return true;
+  } catch (error) {
+    console.error('[power-ranking] Formkurven-Aktualisierung fehlgeschlagen:', error.message);
+    return false;
+  }
+}
+
 async function handleInteraction(interaction, client) {
   const id = interaction.customId || '';
   if (!id.startsWith('pr_')) return;
@@ -727,6 +737,7 @@ async function handleInteraction(interaction, client) {
       if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply({ content: 'Dieser Spieler hat keine Loco-Squad-Rolle mehr.', components: [] });
       store.update(next => assignManualProfile(next, selection.targetId, player, interaction.user.id, selection.clubId));
       pendingAdminPlayerSelections.delete(interaction.user.id);
+      await refreshPlayerForms(client);
       await interaction.editReply({ content: `✅ <@${selection.targetId}> ist jetzt mit **${player.playerName}** verbunden. Ranking und Formkurve verwenden diese Zuordnung.`, components: [], allowedMentions: { parse: [] } });
       await refreshPanels(client, interaction.guild);
       return;
@@ -813,7 +824,9 @@ async function handleInteraction(interaction, client) {
         delete data.links[userId];
         return data;
       });
-      await interaction.update({ content: removed ? `✅ Die EA-Verknüpfung von <@${userId}> wurde gelöscht.` : 'Dieser Spieler hatte keine EA-Verknüpfung.', components: [] });
+      await interaction.deferUpdate();
+      await refreshPlayerForms(client);
+      await interaction.editReply({ content: removed ? `✅ Die EA-Verknüpfung von <@${userId}> wurde gelöscht.` : 'Dieser Spieler hatte keine EA-Verknüpfung.', components: [] });
       await refreshPanels(client, interaction.guild);
       return;
     }
@@ -834,7 +847,8 @@ async function handleInteraction(interaction, client) {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await refreshPanels(client, interaction.guild);
-      return interaction.editReply('✅ Admin-Übersicht und Ranking wurden aktualisiert.');
+      const formUpdated = await refreshPlayerForms(client);
+      return interaction.editReply(formUpdated ? '✅ Admin-Übersicht, Ranking und Spieler-Formkurven wurden aktualisiert.' : '✅ Admin-Übersicht und Ranking wurden aktualisiert. Die Formkurven konnten gerade nicht aktualisiert werden. Bitte erneut versuchen.');
     }
     if (interaction.isButton() && id === 'pr_link_player') return handlePlayerLink(interaction, client);
     if (interaction.isButton() && ['pr_player_previous', 'pr_player_next'].includes(id)) {
@@ -872,7 +886,9 @@ async function handleInteraction(interaction, client) {
         return next;
       });
       pendingPlayerSelections.delete(interaction.user.id);
-      await interaction.update({ content: `✅ Dein Discord-Profil ist jetzt mit **${player.playerName}** verbunden.`, components: [] });
+      await interaction.deferUpdate();
+      await refreshPlayerForms(client);
+      await interaction.editReply({ content: `✅ Dein Discord-Profil ist jetzt mit **${player.playerName}** verbunden.`, components: [] });
       await refreshPanels(client, interaction.guild);
       return;
     }
