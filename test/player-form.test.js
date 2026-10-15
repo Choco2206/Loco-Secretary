@@ -161,3 +161,32 @@ test('refresh waits for an active publisher and does not drop the updated associ
   assert.equal(h.sent, 1); assert.equal(h.edited, 1);
   assert.equal(h.history.get(member.id).embeds[0].title, 'Choco2206');
 });
+
+test('every position shows goals, assists and tackles including seven goals by a midfielder', () => {
+  const rows = [];
+  for (const [index, position] of ['goalkeeper', 'defender', 'midfielder', 'forward'].entries()) {
+    rows.push(match(index * 2, position, 8, { players: [performance(position, 8, { goals: 3, assists: 1 })] }));
+    rows.push(match(index * 2 + 1, position, 8, { players: [performance(position, 8, { goals: 4, assists: 2 })] }));
+  }
+  const p = payload(member, link, data(rows)); const e = p.embeds[0].toJSON();
+  for (const field of e.fields) {
+    assert.match(field.value, /Tore: \*\*7\*\*/);
+    assert.match(field.value, /Vorlagen: \*\*3\*\*/);
+    assert.match(field.value, /Tore\/Spiel: \*\*3,5\*\*/);
+    assert.match(field.value, /Erfolgreiche Tacklings\/Spiel/);
+    assert.ok(field.value.length <= 1024);
+  }
+  assert.ok(JSON.stringify(e).length < 6000);
+});
+
+test('existing form cards are edited with added metrics when stored match data already contains them', async () => {
+  const h = harness(); await h.service.tick(new Date('2026-10-15T00:00:00Z'));
+  const d = h.state; const own = Object.values(fixture.players['18360'])[0];
+  const ownId = Object.keys(fixture.players['18360'])[0];
+  const service = createService({ user: { id: 'bot' } }, { ...h.deps,
+    ranking: () => ({ links: { [member.id]: { playerId: ownId, playerName: own.playername } } }),
+  });
+  await service.refresh(new Date('2026-10-15T00:01:00Z'));
+  assert.equal(h.sent, 1); assert.equal(h.edited, 1);
+  assert.ok(h.history.get(member.id).embeds[0].fields.some(f => f.value.includes('Erfolgreiche Tacklings/Spiel')));
+});

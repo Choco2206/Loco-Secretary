@@ -42,7 +42,9 @@ function weightedPassPercent(rows) {
 }
 function summarize(rows) {
   return { rating: average(rows, 'rating'), passPercent: weightedPassPercent(rows),
-    goals: average(rows, 'goals'), assists: average(rows, 'assists'), tackles: average(rows, 'tackles'), saves: average(rows, 'saves') };
+    goals: average(rows, 'goals'), assists: average(rows, 'assists'),
+    goalsTotal: rows.length && rows.every(p => typeof p.goals === 'number' && Number.isFinite(p.goals)) ? rows.reduce((n, p) => n + p.goals, 0) : null,
+    assistsTotal: rows.length && rows.every(p => typeof p.assists === 'number' && Number.isFinite(p.assists)) ? rows.reduce((n, p) => n + p.assists, 0) : null, tackles: average(rows, 'tackles'), saves: average(rows, 'saves') };
 }
 function playerForm(data, link) {
   const buckets = Object.fromEntries(POSITIONS.map(p => [p, []]));

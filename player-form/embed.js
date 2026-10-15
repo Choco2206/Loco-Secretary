@@ -3,10 +3,10 @@ const { EmbedBuilder } = require('discord.js');
 const { playerForm } = require('./model');
 const LABELS = { goalkeeper: '🧤 Torwart', defender: '🛡️ Abwehr', midfielder: '⚙️ Mittelfeld', forward: '⚽ Sturm' };
 const METRICS = {
-  goalkeeper: [['Ø Note', 'rating'], ['Paraden/Spiel', 'saves'], ['Passquote', 'passPercent', '%']],
-  defender: [['Ø Note', 'rating'], ['Passquote', 'passPercent', '%'], ['Erfolgreiche Tacklings/Spiel', 'tackles']],
-  midfielder: [['Ø Note', 'rating'], ['Passquote', 'passPercent', '%'], ['Vorlagen/Spiel', 'assists'], ['Erfolgreiche Tacklings/Spiel', 'tackles']],
-  forward: [['Ø Note', 'rating'], ['Tore/Spiel', 'goals'], ['Vorlagen/Spiel', 'assists'], ['Passquote', 'passPercent', '%']],
+  goalkeeper: [['Ø Note', 'rating'], ['Paraden/Spiel', 'saves'], ['Passquote', 'passPercent', '%'], ['Tore/Spiel', 'goals'], ['Vorlagen/Spiel', 'assists'], ['Erfolgreiche Tacklings/Spiel', 'tackles']],
+  defender: [['Ø Note', 'rating'], ['Passquote', 'passPercent', '%'], ['Erfolgreiche Tacklings/Spiel', 'tackles'], ['Tore/Spiel', 'goals'], ['Vorlagen/Spiel', 'assists']],
+  midfielder: [['Ø Note', 'rating'], ['Passquote', 'passPercent', '%'], ['Tore/Spiel', 'goals'], ['Vorlagen/Spiel', 'assists'], ['Erfolgreiche Tacklings/Spiel', 'tackles']],
+  forward: [['Ø Note', 'rating'], ['Tore/Spiel', 'goals'], ['Vorlagen/Spiel', 'assists'], ['Passquote', 'passPercent', '%'], ['Erfolgreiche Tacklings/Spiel', 'tackles']],
 };
 function marker(id) { return `Spieler-Formkurve · ${id}`; }
 function value(n, suffix = '') { return n === null ? '–' : `${n.toLocaleString('de-DE', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}${suffix}`; }
@@ -31,7 +31,7 @@ function payload(member, link, data) {
       let lines;
       if (!row.count) lines = ['Noch keine passenden Einsätze erfasst.'];
       else {
-        lines = [`**Letzte ${row.currentCount} Einsätze**`, ...METRICS[position].map(([name, key, suffix]) => metric(name, key, suffix, row))];
+        lines = [`**Letzte ${row.currentCount} Einsätze**`, `Tore: **${row.current.goalsTotal === null ? '–' : row.current.goalsTotal}** · Vorlagen: **${row.current.assistsTotal === null ? '–' : row.current.assistsTotal}**`, ...METRICS[position].map(([name, key, suffix]) => metric(name, key, suffix, row))];
         if (!row.comparable) lines.push(`Noch kein Trend: ${row.count}/10 Einsätze für einen vollständigen 5-gegen-5-Vergleich.`);
       }
       embed.addFields({ name: label, value: lines.join('\n') });
