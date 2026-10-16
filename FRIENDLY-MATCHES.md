@@ -61,3 +61,9 @@ Das Fazit nennt höchstens zwei anhand des Spiels begründete Prüfpunkte. Es gi
 Einzelposts setzen mindestens 3.000 positive Ingame-Sekunden voraus. 49:59 wird trotz gerundeter Anzeige von 50 Minuten nicht veröffentlicht; genau 50:00 wird berücksichtigt. Ohne nachweisbare Dauer wartet der Bot auf vollständigere EA-Daten. Die einmalige Vorschau unterliegt derselben Grenze.
 
 Bereits veröffentlichte eigene Matchposts unter 50 Minuten werden bei der nächsten aktiven Prüfung entfernt. Dafür müssen Autor und Match-ID stimmen und entweder exakte EA-/gespeicherte Sekunden oder eine alte Spieldauerangabe unter 50 Minuten vorliegen. Unbekannte Dauer führt nicht zur Löschung. Entfernte Match-IDs bleiben gegen erneutes Posten gespeichert. Die übrigen Beiträge erhalten die aktuelle Analyse, soweit EA ihre Daten noch liefert. Wochenarchiv und Formkurven behalten ihre eigenen bisherigen Regeln.
+
+## Layout 6 und Analyse v3
+
+Die Analyse bewertet Loco Squad. Gegnerwerte beeinflussen weiterhin die Einordnung von Passsicherheit, Abschlussausbeute, Tacklings, Schussbilanz und Keeperaktionen. Eigene Zahlen und eigene Spieler stehen im Text; separate Gegnerstatistikblöcke und Gegner-Spielernamen entfallen im Analyse-Embed. Ergebnis und beide Spielertabellen bleiben vollständig erhalten.
+
+Bestehende Beiträge erhalten einmalig alle drei frisch gerenderten PNGs samt den fünf Embeds, sofern das Match noch über EA verfügbar ist. Dabei wird dieselbe Nachricht bearbeitet. Ohne EA-Daten werden die drei noch vorhandenen Originalanhänge erneut hochgeladen und in ihren jeweiligen Bild-Embeds verknüpft. Sind weder Matchdaten noch die drei Originaldateien vorhanden, kann der Bot fehlende Bilder nicht rekonstruieren. Die Migration bleibt dann offen. Normale Analyseänderungen laden vorhandene Bilder ebenfalls in derselben Bearbeitung erneut hoch, damit `attachment://` auf tatsächliche Uploads verweist. Es wird keine zusätzliche Bildergalerie angelegt.

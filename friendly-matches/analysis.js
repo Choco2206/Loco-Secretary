@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const ANALYSIS_VERSION = 2;
+const ANALYSIS_VERSION = 3;
 function valid(n) { return typeof n === 'number' && Number.isFinite(n) && n >= 0; }
 function total(players, key) { return players.length && players.every(p => valid(p[key])) ? players.reduce((sum, p) => sum + p[key], 0) : null; }
 function fmt(n, digits = 0) { return valid(n) ? n.toLocaleString('de-DE', { maximumFractionDigits: digits }) : '–'; }
@@ -34,14 +34,14 @@ function passHighlights(rows) {
 }
 function midfield(match) {
   const own = passing(match.own, 'midfielder'); const opp = passing(match.opponent, 'midfielder');
-  const lines = [`**Mittelfeld Loco: ${passLabel(own)}**`, `Gegner-Mittelfeld: ${passLabel(opp)}.`];
+  const lines = [`**Mittelfeld Loco: ${passLabel(own)}**`];
   if (own.quote === null) lines.push('Keine vollständigen oder plausiblen eigenen Mittelfeld-Passdaten vorhanden; der Aufbau bleibt offen.');
   else {
     lines.push(`${own.attempts - own.made} Fehlpässe im eigenen Mittelfeld.`);
     if (opp.quote !== null) {
       const delta = own.quote - opp.quote;
-      lines.push(Math.abs(delta) < 3 ? 'Die reine Passsicherheit beider Mittelfeldreihen lag nah beieinander.' : delta < 0 ? 'Euer Mittelfeld brachte einen kleineren Anteil seiner Pässe an als das gegnerische. Die nicht angekommenen Zuspiele sind ein Ansatzpunkt.' : 'Euer Mittelfeld brachte einen höheren Anteil seiner Pässe an als das gegnerische.');
-      if (valid(match.own.shots) && valid(match.opponent.shots) && own.attempts > opp.attempts && match.own.shots < match.opponent.shots) lines.push(`Mehr Mittelfeld-Passversuche, aber weniger Abschlüsse (${match.own.shots}:${match.opponent.shots}): den Übergang vom Passspiel zum Abschluss anschauen.`);
+      lines.push(Math.abs(delta) < 3 ? 'Eure Passsicherheit im Mittelfeld war im Spielkontext unauffällig.' : delta < 0 ? 'Die Passsicherheit im Mittelfeld war in diesem Spiel ein Ansatzpunkt: die nicht angekommenen Zuspiele nachbesprechen.' : 'Die Passsicherheit im Mittelfeld war in diesem Spiel eine relative Stärke.');
+      if (valid(match.own.shots) && valid(match.opponent.shots) && own.attempts > opp.attempts && match.own.shots < match.opponent.shots) lines.push('Euer Passaufwand im Mittelfeld schlug sich nicht in einem Abschlussvorteil nieder. Den Übergang vom Passspiel zum Abschluss anschauen.');
     }
     lines.push(...passHighlights(own.rows));
   }
@@ -54,13 +54,12 @@ function finishing(match) {
   const quote = rate(own.goals, own.shots);
   const lines = [`**Loco: ${own.goals} Tore aus ${own.shots} Schüssen${quote === null ? '' : ` · ${fmt(quote, 1)} % Ausbeute`}**`];
   const oppQuote = scoring(opp) ? rate(opp.goals, opp.shots) : null;
-  lines.push(`Gegner: ${fmt(opp.goals)} Tore aus ${fmt(opp.shots)} Schüssen${oppQuote === null ? '' : ` · ${fmt(oppQuote, 1)} % Ausbeute`}.`);
   const opposingKeeper = keeperContext(opp);
-  if (valid(opposingKeeper.saves)) lines.push(`Gegnerischer Torwart: ${opposingKeeper.saves} Paraden.`);
+  if (opposingKeeper.saves > 0) lines.push('Ein Teil eurer Abschlüsse wurde vom gegnerischen Torwart abgewehrt. Ob Platzierung oder Chancenqualität das Problem war, zeigen erst die Szenen.');
   if (!own.shots) lines.push('Ihr habt keinen erfassten Abschluss abgegeben: zuerst die Abschlussfindung nachbesprechen.');
-  else if (!own.goals) lines.push(`Keiner eurer ${own.shots} Abschlüsse führte zu einem Tor${opposingKeeper.saves > 0 ? `; der Gegnerkeeper verzeichnete ${opposingKeeper.saves} Paraden` : ''}.`);
-  else if (quote !== null && oppQuote !== null && own.shots > opp.shots && quote < oppQuote) lines.push('Mehr Abschlüsse, aber geringere Ausbeute als der Gegner: die Auswahl und Ausführung der Abschlüsse nachbesprechen.');
-  else if (quote !== null && oppQuote !== null && quote > oppQuote) lines.push('Ihr habt einen größeren Anteil eurer Abschlüsse verwertet als der Gegner.');
+  else if (!own.goals) lines.push(`Keiner eurer ${own.shots} Abschlüsse führte zu einem Tor.`);
+  else if (quote !== null && oppQuote !== null && own.shots > opp.shots && quote < oppQuote) lines.push('Euer Abschlussvolumen reichte nicht für eine entsprechend hohe Ausbeute. Die Auswahl und Ausführung der Abschlüsse nachbesprechen.');
+  else if (quote !== null && oppQuote !== null && quote > oppQuote) lines.push('Eure Verwertung war im Spielkontext eine relative Stärke.');
   const attackers = own.players.filter(p => p.position !== 'goalkeeper' && valid(p.shots) && p.shots >= 3 && valid(p.goals) && p.goals <= p.shots);
   const waste = attackers.filter(p => p.goals === 0).sort((a, b) => b.shots - a.shots)[0];
   const scorer = own.players.filter(p => valid(p.goals) && p.goals > 0 && valid(p.shots) && p.goals <= p.shots).sort((a, b) => b.goals - a.goals || a.shots - b.shots)[0];
@@ -74,14 +73,12 @@ function finishing(match) {
 }
 function defense(match) {
   const own = tackles(match.own); const opp = tackles(match.opponent);
-  const lines = [`**Zugelassene Schüsse: Loco ${fmt(match.opponent.shots)} · Gegner ${fmt(match.own.shots)}**`,
-    `Gegentore: Loco ${fmt(match.opponent.goals)} · Gegner ${fmt(match.own.goals)}.`,
-    `**Loco-Tacklings: ${fmt(own.made)}/${fmt(own.attempts)} erfolgreich · ${fmt(own.quote, 1)} %**`,
-    `Gegner-Tacklings: ${fmt(opp.made)}/${fmt(opp.attempts)} erfolgreich · ${fmt(opp.quote, 1)} %.`];
+  const lines = [`**Loco ließ ${fmt(match.opponent.shots)} Schüsse und ${fmt(match.opponent.goals)} Gegentore zu.**`,
+    `**Loco-Tacklings: ${fmt(own.made)}/${fmt(own.attempts)} erfolgreich · ${fmt(own.quote, 1)} %**`];
   if (own.quote !== null && opp.quote !== null && own.attempts >= 5 && opp.attempts >= 5) {
-    lines.push(own.quote < opp.quote ? 'Eure Tacklingversuche waren anteilig seltener erfolgreich. Timing und Absicherung als gesamtes Team prüfen.' : own.quote > opp.quote ? 'Eure Tacklingversuche waren anteilig häufiger erfolgreich. Die Zahl und Qualität zugelassener Abschlüsse muss daneben betrachtet werden.' : 'Beide Teams hatten dieselbe Erfolgsquote bei Tacklingversuchen.');
+    lines.push(own.quote < opp.quote ? 'Die Erfolgsquote eurer Tacklings fiel im Spielkontext niedrig aus. Timing und Absicherung als gesamtes Team prüfen.' : own.quote > opp.quote ? 'Die Erfolgsquote eurer Tacklings war eine relative Stärke. Die zugelassenen Abschlüsse trotzdem gemeinsam betrachten.' : 'Die Tacklingquote allein erklärt den Spielverlauf nicht.');
   }
-  if (valid(match.opponent.shots) && valid(match.own.shots) && match.opponent.shots > match.own.shots) lines.push('Ihr habt mehr gegnerische Abschlüsse zugelassen als der Gegner. Die Entstehung dieser Situationen ist ein Schwerpunkt.');
+  if (valid(match.opponent.shots) && valid(match.own.shots) && match.opponent.shots > match.own.shots) lines.push('Die Schussbilanz zeigt, dass Loco zu viele gegnerische Abschlussgelegenheiten im Verhältnis zu den eigenen zuließ. Ihre Entstehung ist ein Schwerpunkt.');
   const candidates = match.own.players.filter(p => ['defender', 'midfielder'].includes(p.position) && p.tackleAttempts >= 5 && rate(p.tackles, p.tackleAttempts) !== null);
   const low = candidates.filter(p => rate(p.tackles, p.tackleAttempts) < 50).sort((a, b) => rate(a.tackles, a.tackleAttempts) - rate(b.tackles, b.tackleAttempts) || b.tackleAttempts - a.tackleAttempts)[0];
   const strong = candidates.filter(p => rate(p.tackles, p.tackleAttempts) >= 70).sort((a, b) => b.tackles - a.tackles)[0];
@@ -98,14 +95,13 @@ function goalkeeper(match) {
     if (own.rows.length > 1) lines.push('Mehrere Torwarte mit Einsatzzeit: keine sichere individuelle Zuordnung der Team-Gegentore.');
     else if (own.rows[0].secondsPlayed < match.durationSeconds - 60) lines.push('Der Keeper war nicht während der gesamten erfassten Spielzeit dabei; die Team-Gegentore werden ihm nicht vollständig zugeordnet.');
   }
-  if (opp.rows.length) lines.push(`Gegnerischer Torwart${opp.rows.length === 1 ? ` ${name(opp.rows[0])}` : ' / mehrere Keeper'}: ${fmt(opp.saves)} Paraden · EA-Note ${fmt(opp.rating, 1)}.`);
-  lines.push(`Loco ließ ${fmt(match.opponent.shots)} Schüsse und ${fmt(match.opponent.goals)} Gegentore zu; der Gegner ${fmt(match.own.shots)} Schüsse und ${fmt(match.own.goals)} Gegentore.`);
+  lines.push(`Bei ${fmt(match.opponent.shots)} gegnerischen Schüssen kassierte Loco ${fmt(match.opponent.goals)} Gegentore.`);
   if (own.rows.length === 1 && own.rows[0].secondsPlayed >= match.durationSeconds - 60 && scoring(match.opponent) && valid(own.saves)) {
     if (match.opponent.goals === 0) lines.push(own.saves > 0 ? 'Euer Keeper hat mit seinen Paraden zum Zu-null-Spiel beigetragen.' : 'Zu null ohne erfasste Parade: anhand dieser Werte wenig direkte Torwartaktionen.');
     else if (own.saves > 0) lines.push('Euer Keeper musste eingreifen. Die Gegentore gemeinsam mit den zugelassenen Abschlüssen betrachten.');
     else lines.push('Keine Parade bei Gegentoren: die Gegentorszenen prüfen, ohne daraus automatisch einen Torwartfehler abzuleiten.');
   }
-  if (valid(own.saves) && valid(opp.saves) && own.saves !== opp.saves) lines.push('Die unterschiedliche Zahl an Paraden beschreibt die erfassten Abwehraktionen, keine Rangfolge der Torwartleistung.');
+  if (valid(own.saves) && valid(opp.saves) && own.saves !== opp.saves) lines.push(own.saves > opp.saves ? 'Euer Keeper verzeichnete im Spielkontext mehr Abwehraktionen. Das spricht für mehr erfasste Eingriffe, beweist aber keine bessere Torwartleistung.' : 'Euer Keeper verzeichnete im Spielkontext weniger Abwehraktionen. Daraus lässt sich keine schwächere Torwartleistung ableiten.');
   return lines.join('\n');
 }
 function coachingFocus(match) {
@@ -137,7 +133,7 @@ function buildAnalysis(match, budget = 6000) {
     [midfield, finishing, defense, goalkeeper].forEach((analyze, index) => embed.addFields({ name: labels[index], value: analyze(match).slice(0, 1024) }));
     embed.addFields({ name: '🎯 Schwerpunkte für die Nachbesprechung', value: coachingFocus(match) });
   }
-  embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Beide Teams berücksichtigt · Ursachen und Chancenqualität erfordern Spielszenen` });
+  embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Fokus Loco Squad · Ursachen und Chancenqualität erfordern Spielszenen` });
   return fitAnalysis(embed, budget);
 }
 module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus };

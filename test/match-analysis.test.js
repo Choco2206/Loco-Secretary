@@ -44,12 +44,13 @@ test('keeper analysis handles absent keeper, partial appearances and multiple ke
 
 test('both teams contextualize midfield, shots, tackles and saves without inventing exact position or blame', () => {
   const m = match(); const e = buildAnalysis(m).toJSON();
-  assert.match(e.fields[0].value, /Gegner-Mittelfeld: 52\/70/);
-  assert.match(e.fields[0].value, /Mehr Mittelfeld-Passversuche, aber weniger Abschlüsse/);
+  assert.ok(!e.fields[0].value.includes('Gegner-Mittelfeld:'));
+  assert.match(e.fields[0].value, /Passaufwand im Mittelfeld/);
   assert.match(e.fields[0].value, /AirLuk21/);
-  assert.match(e.fields[1].value, /Gegner: 4 Tore aus 10 Schüssen/);
-  assert.match(e.fields[2].value, /Gegner-Tacklings: 14\/46/);
-  assert.match(e.fields[3].value, /Flayz/);
+  assert.ok(!e.fields[1].value.includes('Gegner:'));
+  assert.ok(!e.fields[2].value.includes('Gegner-Tacklings:'));
+  assert.ok(!e.fields[3].value.includes('Flayz'));
+  assert.match(e.fields[3].value, /ZeroSchnitzel/);
   assert.match(e.fields[4].name, /Nachbesprechung/);
   assert.ok(!JSON.stringify(e).includes(' LS '));
 });
@@ -59,7 +60,7 @@ test('opponent keeper saves are considered without treating total shots as shots
   m.own.shots = 12; m.own.goals = 2;
   m.own.players.forEach(p => { p.goals = 0; }); m.own.players[0].goals = 2;
   const text = finishing(m);
-  assert.match(text, /Gegnerischer Torwart: 6 Paraden/);
+  assert.match(text, /vom gegnerischen Torwart abgewehrt/);
   assert.match(text, /2 Tore aus 12 Schüssen/);
   assert.ok(!text.includes('8 Schüsse aufs Tor'));
 });
@@ -80,4 +81,16 @@ test('analysis respects a reduced message budget while retaining all five catego
   const e = buildAnalysis(match(), 1600).toJSON();
   const count = (e.title?.length || 0) + (e.footer?.text?.length || 0) + e.fields.reduce((n, f) => n + f.name.length + f.value.length, 0);
   assert.ok(count <= 1600); assert.equal(e.fields.length, 5);
+});
+
+test('opponent figures change the assessment without printing opponent stat blocks or names', () => {
+  const m = match();
+  const before = midfield(m);
+  m.opponent.players.filter(p => p.position === 'midfielder').forEach(p => { p.passes = 100; p.passAttempts = 100; });
+  const after = midfield(m);
+  assert.notEqual(before, after);
+  assert.match(after, /Passsicherheit.*Ansatzpunkt/);
+  for (const text of [before, after, finishing(m), goalkeeper(m), require('../friendly-matches/analysis').defense(m)]) {
+    assert.doesNotMatch(text, /Gegner-Mittelfeld:|Gegner-Tacklings:|Gegner: \d|Flayz_FRAQ/);
+  }
 });

@@ -4,7 +4,7 @@ const { backfillAnalysis, recoverPosted } = require('../friendly-matches/service
 const fixture = require('./fixtures/friendly-match.json');
 const { EmbedBuilder } = require('discord.js');
 function harness() {
-  const data = { posted: { [fixture.matchId]: { messageId: 'msg', layoutVersion: 3 } } };
+  const data = { posted: { [fixture.matchId]: { messageId: 'msg', layoutVersion: 3, imageRepairVersion: 1 } } };
   let edits = 0; let saved = 0;
   const original = [new EmbedBuilder().setImage('https://example.org/existing-score.png').setFooter({ text: 'Friendly Layout · 3' }).toJSON(),
     new EmbedBuilder().setTitle('Existing statistics').setFooter({ text: `Friendly Match · ${fixture.matchId}` }).addFields({ name: 'Schüsse', value: '7 : 10' }).toJSON()];
@@ -40,7 +40,7 @@ test('failed edit stays pending for the next check', async () => {
   h.message.edit = edit; await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
 });
 
-test('CDN references become attachment references for all three images, even without EA history', async () => {
+test('all three original images are re-uploaded into embeds without EA history or a duplicate gallery', async () => {
   const h = harness(); h.data.posted[fixture.matchId].layoutVersion = 4;
   const filenames = ['ergebnis.png', 'loco-squad.png', 'gegner.png'];
   const attachments = filenames.map((name, i) => ({ id: String(i + 1), name, url: `https://cdn.discordapp.com/attachments/1/2/${name}?ex=abc`, proxyURL: `https://media.discordapp.net/attachments/1/2/${name}?ex=abc` }));
@@ -51,8 +51,9 @@ test('CDN references become attachment references for all three images, even wit
     new EmbedBuilder().setTitle('🔎 Matchanalyse · Loco Squad').addFields({ name: 'Existing analysis', value: 'Keep this text' }).toJSON()];
   let edits = 0;
   h.message.edit = async p => {
-    assert.equal(p.files, undefined);
-    assert.deepEqual(p.attachments, filenames.map((filename, i) => ({ id: String(i + 1), filename })));
+    assert.deepEqual(p.files.map(f => f.name), filenames);
+    assert.deepEqual(p.files.map(f => f.attachment), attachments.map(a => a.url));
+    assert.deepEqual(p.attachments, []);
     assert.equal(p.embeds[0].data.image.url, 'attachment://ergebnis.png');
     assert.equal(p.embeds[2].data.image.url, 'attachment://loco-squad.png');
     assert.equal(p.embeds[3].data.image.url, 'attachment://gegner.png');
@@ -67,14 +68,14 @@ test('CDN references become attachment references for all three images, even wit
 
 test('old analysis is replaced in place with comparative analysis while preserving statistic and attachment slots', async () => {
   const h = harness();
-  h.data.posted[fixture.matchId] = { messageId: 'msg', layoutVersion: 5, analysisPresent: true, analysisVersion: 1 };
+  h.data.posted[fixture.matchId] = { messageId: 'msg', layoutVersion: 5, imageRepairVersion: 1, analysisPresent: true, analysisVersion: 1 };
   h.message.embeds[0].footer.text = 'Friendly Layout · 5';
   h.message.embeds.push(new EmbedBuilder().setTitle('🔎 Matchanalyse · Loco Squad').addFields({ name: 'Old analysis', value: 'Old single-team text' }).toJSON());
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save);
   assert.equal(h.edits, 1); assert.equal(h.message.embeds.length, 3);
   assert.deepEqual(h.message.embeds[1], h.original[1]);
-  assert.match(h.message.embeds[2].footer.text, /Analyse v2/);
-  assert.match(h.message.embeds[2].fields[0].value, /Gegner-Mittelfeld/);
+  assert.match(h.message.embeds[2].footer.text, /Analyse v3/);
+  assert.match(h.message.embeds[2].fields[0].value, /Mittelfeld Loco/);
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
 });
 
@@ -119,4 +120,46 @@ test('exactly 50 minutes is retained; deletion failure retries and unrelated mes
   h.message.delete = async () => { deletes++; };
   await backfillAnalysis(h.channel, 'bot', [withDuration(300)], h.data, h.save);
   assert.equal(deletes, 1);
+});
+
+test('damaged posts regain score and both tables with real PNG uploads and latest analysis in the same message', async () => {
+  const h = harness(); delete h.data.posted[fixture.matchId].imageRepairVersion;
+  h.message.embeds = [h.message.embeds[1]];
+  let payload; let edits = 0;
+  h.message.edit = async p => { payload = p; edits++; h.message.embeds = p.embeds.map(e => e.toJSON()); };
+  const options = { buildPayload: m => require('../friendly-matches/renderer').buildPayload(m, [null, null]) };
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save, options);
+  assert.equal(edits, 1); assert.equal(payload.embeds.length, 5);
+  assert.deepEqual(payload.attachments, []);
+  assert.deepEqual(payload.files.map(f => f.name), ['ergebnis.png', 'loco-squad.png', 'gegner.png']);
+  for (const file of payload.files) assert.equal(file.attachment.subarray(1, 4).toString(), 'PNG');
+  assert.equal(payload.embeds[0].data.image.url, 'attachment://ergebnis.png');
+  assert.equal(payload.embeds[2].data.image.url, 'attachment://loco-squad.png');
+  assert.equal(payload.embeds[3].data.image.url, 'attachment://gegner.png');
+  assert.match(payload.embeds[4].data.footer.text, /Analyse v3/);
+  assert.equal(h.data.posted[fixture.matchId].imageRepairVersion, 1);
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save, options);
+  assert.equal(edits, 1);
+});
+
+test('failed full image restoration remains pending for retry', async () => {
+  const h = harness(); delete h.data.posted[fixture.matchId].imageRepairVersion;
+  h.message.edit = async () => { throw new Error('upload failed'); };
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save, { buildPayload: async () => ({ embeds: [], files: [] }) });
+  assert.equal(h.data.posted[fixture.matchId].imageRepairVersion, undefined);
+});
+
+test('original attachments restore all missing image slots even after EA data expires', () => {
+  const { restoreImageUploads } = require('../friendly-matches/service');
+  const names = ['ergebnis.png', 'loco-squad.png', 'gegner.png'];
+  const message = { attachments: new Map(names.map((name, i) => [String(i), { name, url: `https://cdn.discordapp.com/attachments/1/2/${name}` }])) };
+  const summary = new EmbedBuilder().setTitle('Loco Squad 1 : 2 Gegner').setFooter({ text: 'Friendly Match · game' });
+  const analysis = new EmbedBuilder().setTitle('🔎 Matchanalyse · Loco Squad');
+  const embeds = [summary, analysis];
+  const payload = restoreImageUploads(message, embeds);
+  assert.deepEqual(payload.attachments, []);
+  assert.deepEqual(payload.files.map(f => f.name), names);
+  assert.equal(embeds.length, 5);
+  assert.deepEqual([embeds[0], embeds[2], embeds[3]].map(e => e.data.image.url), names.map(name => `attachment://${name}`));
+  assert.equal(embeds[1], summary); assert.equal(embeds[4], analysis);
 });
