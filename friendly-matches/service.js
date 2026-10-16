@@ -5,7 +5,7 @@ const store = require('./store');
 const { buildPayload, LAYOUT_VERSION } = require('./renderer');
 const previewRequest = require('./preview-request.json');
 const { EmbedBuilder } = require('discord.js');
-const { buildAnalysis } = require('./analysis');
+const { buildAnalysis, ANALYSIS_VERSION } = require('./analysis');
 
 // Discord history is also checked, covering a restart after send() but before the local save.
 async function recoverPosted(channel, botId, now) {
@@ -23,7 +23,7 @@ async function recoverPosted(channel, botId, now) {
         const match = /^Friendly Match · (.+)$/.exec(embed.footer?.text || '');
         if (match) {
           const layout = (message.embeds || []).map(e => /^Friendly Layout · (\d+)$/.exec(e.footer?.text || '')).find(Boolean);
-          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') };
+          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad'), analysisVersion: Number(/^Analyse v(\d+)/.exec((message.embeds || []).find(e => e.title === '🔎 Matchanalyse · Loco Squad')?.footer?.text || '')?.[1] || 1) };
         }
       }
     }
@@ -62,13 +62,18 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save) {
   let updated = 0;
   const available = new Map(rawMatches.map(parseMatch).filter(Boolean).map(m => [m.id, m]));
   for (const [id, entry] of Object.entries(data.posted)) {
-    if ((entry.layoutVersion || 1) >= 5 && entry.analysisPresent) continue;
+    if ((entry.layoutVersion || 1) >= 5 && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
     try {
       const message = await channel.messages.fetch(entry.messageId);
       if (message.author?.id !== botId || !message.embeds?.some(e => e.footer?.text === `Friendly Match · ${id}`)) throw new Error('Nachricht stimmt nicht mit Bot und Match-ID überein.');
       const before = message.embeds.map(e => typeof e.toJSON === 'function' ? e.toJSON() : e);
       const embeds = before.map(e => EmbedBuilder.from(e));
-      if (!embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad') && available.has(id)) embeds.push(buildAnalysis(available.get(id)));
+      const analysisIndex = embeds.findIndex(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
+      if (available.has(id) && (analysisIndex < 0 || (entry.analysisVersion || 1) < ANALYSIS_VERSION)) {
+        const others = embeds.filter((_, index) => index !== analysisIndex);
+        const analysis = buildAnalysis(available.get(id), Math.max(500, 6000 - embedLength(others.map(e => e.toJSON()))));
+        if (analysisIndex < 0) embeds.push(analysis); else embeds[analysisIndex] = analysis;
+      }
       const attachments = restoreAttachmentReferences(message, embeds);
       if (embeds.length > 10 || embedLength(embeds.map(e => e.toJSON())) > 6000) throw new Error('Discord-Embed-Limit würde überschritten.');
       for (const e of embeds) if (/^Friendly Layout · \d+$/.test(e.data.footer?.text || '')) e.setFooter({ text: 'Friendly Layout · 5' });
@@ -79,6 +84,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save) {
       }
       entry.layoutVersion = 5;
       entry.analysisPresent = embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
+      entry.analysisVersion = Number(/^Analyse v(\d+)/.exec(embeds.find(e => e.data.title === '🔎 Matchanalyse · Loco Squad')?.data.footer?.text || '')?.[1] || 1);
       save(data);
     } catch (error) {
       console.error(`[friendly-matches] Post ${id} konnte nicht nachgepflegt werden:`, error.message);
@@ -148,7 +154,7 @@ function createService(client, options = {}) {
         deps.save(data);
         for (const match of matches) {
           const message = await channel.send(await deps.buildPayload(match));
-          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION, analysisPresent: true };
+          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
         }

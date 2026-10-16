@@ -64,3 +64,16 @@ test('CDN references become attachment references for all three images, even wit
   await backfillAnalysis(h.channel, 'bot', [], h.data, h.save);
   assert.equal(edits, 1);
 });
+
+test('old analysis is replaced in place with comparative analysis while preserving statistic and attachment slots', async () => {
+  const h = harness();
+  h.data.posted[fixture.matchId] = { messageId: 'msg', layoutVersion: 5, analysisPresent: true, analysisVersion: 1 };
+  h.message.embeds[0].footer.text = 'Friendly Layout · 5';
+  h.message.embeds.push(new EmbedBuilder().setTitle('🔎 Matchanalyse · Loco Squad').addFields({ name: 'Old analysis', value: 'Old single-team text' }).toJSON());
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save);
+  assert.equal(h.edits, 1); assert.equal(h.message.embeds.length, 3);
+  assert.deepEqual(h.message.embeds[1], h.original[1]);
+  assert.match(h.message.embeds[2].footer.text, /Analyse v2/);
+  assert.match(h.message.embeds[2].fields[0].value, /Gegner-Mittelfeld/);
+  await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
+});

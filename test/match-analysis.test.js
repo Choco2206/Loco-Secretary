@@ -8,7 +8,7 @@ function match() { return parseMatch(structuredClone(fixture)); }
 
 test('analysis uses actual midfield totals and specific results from the reference match', () => {
   const m = match(); const e = buildAnalysis(m).toJSON();
-  assert.equal(e.fields.length, 4);
+  assert.equal(e.fields.length, 5);
   assert.match(e.fields[0].value, /84\/107/); assert.match(e.fields[0].value, /23 Fehlpässe/);
   assert.match(e.fields[1].value, /0 Tore aus 7 Schüssen/);
   assert.match(e.fields[2].value, /8\/40 erfolgreich/);
@@ -40,4 +40,44 @@ test('keeper analysis handles absent keeper, partial appearances and multiple ke
   keeper.secondsPlayed = 100; assert.match(goalkeeper(m), /nicht während der gesamten/);
   m.own.players.push({ ...keeper, id: 'other', secondsPlayed: 200 }); assert.match(goalkeeper(m), /Mehrere Torwarte/);
   m.own.players = m.own.players.filter(p => p.position !== 'goalkeeper'); assert.match(goalkeeper(m), /Kein menschlicher Torwart/);
+});
+
+test('both teams contextualize midfield, shots, tackles and saves without inventing exact position or blame', () => {
+  const m = match(); const e = buildAnalysis(m).toJSON();
+  assert.match(e.fields[0].value, /Gegner-Mittelfeld: 52\/70/);
+  assert.match(e.fields[0].value, /Mehr Mittelfeld-Passversuche, aber weniger Abschlüsse/);
+  assert.match(e.fields[0].value, /AirLuk21/);
+  assert.match(e.fields[1].value, /Gegner: 4 Tore aus 10 Schüssen/);
+  assert.match(e.fields[2].value, /Gegner-Tacklings: 14\/46/);
+  assert.match(e.fields[3].value, /Flayz/);
+  assert.match(e.fields[4].name, /Nachbesprechung/);
+  assert.ok(!JSON.stringify(e).includes(' LS '));
+});
+
+test('opponent keeper saves are considered without treating total shots as shots on target', () => {
+  const m = match(); const oppKeeper = m.opponent.players.find(p => p.position === 'goalkeeper'); oppKeeper.saves = 6;
+  m.own.shots = 12; m.own.goals = 2;
+  m.own.players.forEach(p => { p.goals = 0; }); m.own.players[0].goals = 2;
+  const text = finishing(m);
+  assert.match(text, /Gegnerischer Torwart: 6 Paraden/);
+  assert.match(text, /2 Tore aus 12 Schüssen/);
+  assert.ok(!text.includes('8 Schüsse aufs Tor'));
+});
+
+test('small individual samples do not trigger named pass or tackling criticism', () => {
+  const m = match();
+  m.own.players.forEach(p => { p.name = 'TinySample'; p.passAttempts = 2; p.passes = 0; p.tackleAttempts = 1; p.tackles = 0; });
+  assert.ok(!midfield(m).includes('**TinySample'));
+  assert.ok(!require('../friendly-matches/analysis').defense(m).includes('**TinySample'));
+});
+
+test('missing keeper saves never turn into a claim that no saves were made', () => {
+  const m = match(); m.own.players.find(p => p.position === 'goalkeeper').saves = null;
+  assert.ok(!goalkeeper(m).includes('Keine Parade bei Gegentoren'));
+});
+
+test('analysis respects a reduced message budget while retaining all five categories', () => {
+  const e = buildAnalysis(match(), 1600).toJSON();
+  const count = (e.title?.length || 0) + (e.footer?.text?.length || 0) + e.fields.reduce((n, f) => n + f.name.length + f.value.length, 0);
+  assert.ok(count <= 1600); assert.equal(e.fields.length, 5);
 });

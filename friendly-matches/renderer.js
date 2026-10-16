@@ -128,11 +128,12 @@ async function buildPayload(match, logos) {
       { name: `⚽ ${b.name}`.slice(0, 256), value: scorers(b), inline: true },
       { name: 'Man of the Match', value: motm.slice(0, 1024) },
       ...[['Schüsse', 'shots'], ['Passquote', 'passPercent', 0, ' %'], ['Ø Rating', 'averageRating', 1], ['Tackle-Quote', 'tacklePercent', 0, ' %'], ['Pässe angekommen', 'passes'], ['Paraden', 'saves']].map(([name, key, digits, suffix]) => ({ name, value: pair(key, digits, suffix), inline: true })));
+  const prior = [new EmbedBuilder().setColor(summary.data.color).setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` }), summary,
+    new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
+    new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png')];
+  const used = prior.reduce((n, e) => { const j = e.toJSON(); return n + (j.title?.length || 0) + (j.description?.length || 0) + (j.footer?.text?.length || 0) + (j.fields || []).reduce((v, f) => v + f.name.length + f.value.length, 0); }, 0);
   return {
-    embeds: [new EmbedBuilder().setColor(summary.data.color).setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` }), summary,
-      new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
-      new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png'),
-      buildAnalysis(match)],
+    embeds: [...prior, buildAnalysis(match, Math.max(500, 6000 - used))],
     files: [new AttachmentBuilder(score, { name: 'ergebnis.png' }), new AttachmentBuilder(own, { name: 'loco-squad.png' }), new AttachmentBuilder(opponent, { name: 'gegner.png' })],
     allowedMentions: { parse: [] },
   };
