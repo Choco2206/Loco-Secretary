@@ -4,6 +4,7 @@ const { normalizePosition } = require('../power-ranking/scoring');
 const CLUB_ID = '18360';
 const CHANNEL_ID = '1559992305467916399';
 const PLATFORM = 'common-gen5';
+const MIN_MATCH_SECONDS = 50 * 60;
 const POLL_MS = 10 * 60 * 1000;
 const POSITIONS = { goalkeeper: 'TW', defender: 'ABW', midfielder: 'MIT', forward: 'ANG' };
 
@@ -78,15 +79,18 @@ function parseMatch(raw) {
   return { id, timestamp: date.toISOString(), own: teams[0], opponent: teams[1],
     durationSeconds, termination, minutes: durationSeconds === null ? null : Math.round(durationSeconds / 60) };
 }
+function isPublishableMatch(match) {
+  return Boolean(match && Number.isFinite(match.durationSeconds) && match.durationSeconds >= MIN_MATCH_SECONDS);
+}
 function candidates(rawMatches, now, posted = {}) {
   const result = new Map();
   for (const raw of rawMatches) {
     const match = parseMatch(raw);
-    if (!match || posted[match.id]) continue;
+    if (!isPublishableMatch(match) || posted[match.id]) continue;
     const date = new Date(match.timestamp);
     if (date > now || !isActive(date) || sessionKey(date) !== sessionKey(now)) continue;
     result.set(match.id, match);
   }
   return [...result.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp) || a.id.localeCompare(b.id));
 }
-module.exports = { CLUB_ID, CHANNEL_ID, PLATFORM, POLL_MS, POSITIONS, localParts, isActive, sessionKey, matchTime, number, percent, parseMatch, candidates };
+module.exports = { MIN_MATCH_SECONDS, isPublishableMatch, CLUB_ID, CHANNEL_ID, PLATFORM, POLL_MS, POSITIONS, localParts, isActive, sessionKey, matchTime, number, percent, parseMatch, candidates };

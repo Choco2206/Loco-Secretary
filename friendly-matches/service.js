@@ -1,5 +1,5 @@
 'use strict';
-const { isActive, localParts, POLL_MS, candidates, parseMatch, CLUB_ID, CHANNEL_ID, PLATFORM } = require('./model');
+const { MIN_MATCH_SECONDS, isPublishableMatch, isActive, localParts, POLL_MS, candidates, parseMatch, CLUB_ID, CHANNEL_ID, PLATFORM } = require('./model');
 const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
 const { buildPayload, LAYOUT_VERSION } = require('./renderer');
@@ -58,14 +58,39 @@ function restoreAttachmentReferences(message, embeds) {
   // Retain the existing uploads, choosing one ID per filename; no second upload is required.
   return [...byName.values()].map(a => ({ id: a.id, filename: a.name }));
 }
+function knownShortDuration(entry, match, message) {
+  // Prefer exact EA seconds. Rounded legacy minutes below 50 also prove a short match.
+  const seconds = match?.durationSeconds ?? entry.durationSeconds;
+  if (Number.isFinite(seconds) && seconds > 0) return seconds < MIN_MATCH_SECONDS ? seconds : null;
+  for (const embed of message?.embeds || []) {
+    const duration = /Spieldauer(?:\s+ca\.)?\s+(\d+)\s*[′’']/i.exec(embed.description || '');
+    if (duration && Number(duration[1]) < 50) return Number(duration[1]) * 60;
+  }
+  return null;
+}
 async function backfillAnalysis(channel, botId, rawMatches, data, save) {
   let updated = 0;
   const available = new Map(rawMatches.map(parseMatch).filter(Boolean).map(m => [m.id, m]));
   for (const [id, entry] of Object.entries(data.posted)) {
-    if ((entry.layoutVersion || 1) >= 5 && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
+    if (entry.suppressed) continue;
+    const match = available.get(id);
+    const short = knownShortDuration(entry, match);
+    if (entry.durationPolicyVersion === 1 && short === null && (entry.layoutVersion || 1) >= 5 && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
     try {
       const message = await channel.messages.fetch(entry.messageId);
       if (message.author?.id !== botId || !message.embeds?.some(e => e.footer?.text === `Friendly Match · ${id}`)) throw new Error('Nachricht stimmt nicht mit Bot und Match-ID überein.');
+      const shortSeconds = knownShortDuration(entry, match, message);
+      if (shortSeconds !== null) {
+        await message.delete();
+        entry.suppressed = true;
+        entry.durationSeconds = shortSeconds;
+        entry.durationPolicyVersion = 1;
+        save(data);
+        console.log(`[friendly-matches] Kurzspiel ${id} unter 50 Minuten entfernt.`);
+        continue;
+      }
+      entry.durationPolicyVersion = 1;
+      if (match?.durationSeconds > 0) entry.durationSeconds = match.durationSeconds;
       const before = message.embeds.map(e => typeof e.toJSON === 'function' ? e.toJSON() : e);
       const embeds = before.map(e => EmbedBuilder.from(e));
       const analysisIndex = embeds.findIndex(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
@@ -117,7 +142,7 @@ function createService(client, options = {}) {
         const channel = await deps.getChannel();
         if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${CHANNEL_ID} nicht erreichbar.`);
         const recovered = await deps.recover(channel, now);
-        Object.assign(data.posted, recovered);
+        for (const [id, entry] of Object.entries(recovered)) data.posted[id] = { ...data.posted[id], ...entry };
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save);
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         await deps.onMatches(raw, now);
@@ -128,7 +153,7 @@ function createService(client, options = {}) {
         if (refresh?.refreshLayoutVersion && existing && (existing.layoutVersion || 1) < refresh.refreshLayoutVersion
           && now.getTime() < new Date(refresh.expiresAt).getTime()) {
           const preview = raw.map(parseMatch).find(match => match?.id === refresh.matchId);
-          if (preview) {
+          if (!existing.suppressed && isPublishableMatch(preview)) {
             const message = await channel.messages.fetch(existing.messageId);
             if (message.author?.id !== client.user.id) throw new Error('Vorschau-Nachricht gehört nicht diesem Bot.');
             await message.edit({ ...await deps.buildPayload(preview), attachments: [] });
@@ -142,7 +167,7 @@ function createService(client, options = {}) {
         const request = deps.previewRequest;
         if (request && now.getTime() < new Date(request.expiresAt).getTime() && !data.posted[request.matchId]) {
           const preview = raw.map(parseMatch).find(match => match?.id === request.matchId);
-          if (preview && new Date(preview.timestamp) <= now && !matches.some(match => match.id === preview.id)) {
+          if (isPublishableMatch(preview) && new Date(preview.timestamp) <= now && !matches.some(match => match.id === preview.id)) {
             matches.push(preview);
             matches.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
           }
@@ -154,7 +179,7 @@ function createService(client, options = {}) {
         deps.save(data);
         for (const match of matches) {
           const message = await channel.send(await deps.buildPayload(match));
-          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
+          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, durationSeconds: match.durationSeconds, durationPolicyVersion: 1, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
         }

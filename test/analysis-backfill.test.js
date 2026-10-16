@@ -77,3 +77,46 @@ test('old analysis is replaced in place with comparative analysis while preservi
   assert.match(h.message.embeds[2].fields[0].value, /Gegner-Mittelfeld/);
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
 });
+
+function withDuration(seconds) {
+  const raw = structuredClone(fixture);
+  for (const players of Object.values(raw.players)) for (const p of Object.values(players)) {
+    delete p.gameTime; p.secondsPlayed = seconds;
+  }
+  return raw;
+}
+test('short old posts are removed once even with current analysis/layout; marker prevents replay', async () => {
+  const h = harness(); let deletes = 0;
+  Object.assign(h.data.posted[fixture.matchId], { layoutVersion: 5, analysisPresent: true, analysisVersion: 2, durationPolicyVersion: 1 });
+  h.message.delete = async () => { deletes++; };
+  await backfillAnalysis(h.channel, 'bot', [withDuration(2999)], h.data, h.save);
+  assert.equal(deletes, 1); assert.equal(h.edits, 0);
+  assert.equal(h.data.posted[fixture.matchId].suppressed, true);
+  await backfillAnalysis(h.channel, 'bot', [withDuration(2999)], h.data, h.save);
+  assert.equal(deletes, 1);
+});
+test('legacy duration can remove short posts without EA data; 50 minutes or unknown are retained', async () => {
+  for (const minutes of [46, 50, null]) {
+    const h = harness(); let deletes = 0;
+    h.message.delete = async () => { deletes++; };
+    if (minutes !== null) h.message.embeds[1].description = `Freundschaftsspiel · Spieldauer ca. ${minutes}′`;
+    await backfillAnalysis(h.channel, 'bot', [], h.data, h.save);
+    assert.equal(deletes, minutes === 46 ? 1 : 0);
+  }
+});
+test('exactly 50 minutes is retained; deletion failure retries and unrelated messages are protected', async () => {
+  const h = harness(); let deletes = 0;
+  h.message.delete = async () => { deletes++; };
+  await backfillAnalysis(h.channel, 'bot', [withDuration(3000)], h.data, h.save);
+  assert.equal(deletes, 0);
+  h.message.author.id = 'other';
+  await backfillAnalysis(h.channel, 'bot', [withDuration(300)], h.data, h.save);
+  assert.equal(deletes, 0);
+  h.message.author.id = 'bot';
+  h.message.delete = async () => { throw new Error('Discord offline'); };
+  await backfillAnalysis(h.channel, 'bot', [withDuration(300)], h.data, h.save);
+  assert.equal(h.data.posted[fixture.matchId].suppressed, undefined);
+  h.message.delete = async () => { deletes++; };
+  await backfillAnalysis(h.channel, 'bot', [withDuration(300)], h.data, h.save);
+  assert.equal(deletes, 1);
+});

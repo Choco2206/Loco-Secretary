@@ -173,3 +173,24 @@ test('termination time and EA result appear in Discord description and image ren
   assert.match(description, /Vorzeitig beendet nach ca\. 46′/);
   assert.match(description, /EA-Wertung 0:4/);
 });
+
+test('minimum duration uses exact seconds, rejects unknown time, and includes exactly 50 minutes', () => {
+  const now = new Date('2026-10-14T20:00:00Z');
+  const values = [2999, 3000, null].map((seconds, i) => {
+    const raw = match(String(i), '2026-10-14T19:50:00Z');
+    for (const players of Object.values(raw.players)) for (const p of Object.values(players)) {
+      delete p.gameTime; p.secondsPlayed = seconds;
+    }
+    return raw;
+  });
+  assert.equal(parseMatch(values[0]).minutes, 50);
+  assert.deepEqual(candidates(values, now).map(m => m.id), ['1']);
+});
+
+test('one-off preview cannot bypass minimum duration', async () => {
+  const raw = match('short-preview', '2026-10-14T10:00:00Z');
+  for (const players of Object.values(raw.players)) for (const p of Object.values(players)) p.secondsPlayed = '2999';
+  const h = harness({ fetchMatches: async () => [raw], previewRequest: { matchId: raw.matchId, expiresAt: '2026-10-15T00:00:00Z' } });
+  await h.service.tick(new Date('2026-10-14T20:00:00Z'));
+  assert.equal(h.sends.length, 0);
+});
