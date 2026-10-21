@@ -37,6 +37,7 @@ const pendingAdminPlayerSelections = new Map();
 let captureRunning = false;
 let refreshRunning = false;
 let weeklyRunning = false;
+let scheduleRunning = false;
 
 function isAdmin(interaction) {
   return interaction.user.id === OWNER_USER_ID
@@ -51,6 +52,47 @@ function berlinDateParts(date = new Date()) {
     hourCycle: 'h23',
   }).formatToParts(date);
   return Object.fromEntries(parts.map((part) => [part.type, part.value]));
+}
+
+function scheduledWindow(now = new Date()) {
+  const hour = Number(berlinDateParts(now).hour);
+  const start = new Date(now);
+  start.setUTCSeconds(0, 0);
+  // Walk real hours to preserve Berlin boundaries across both DST changes.
+  while (Number(berlinDateParts(start).hour) !== 20) start.setUTCHours(start.getUTCHours() - 1);
+  start.setUTCMinutes(0);
+  const end = new Date(start);
+  do { end.setUTCHours(end.getUTCHours() + 1); }
+  while (Number(berlinDateParts(end).hour) !== 4);
+  return { startedAt: start.toISOString(), endedAt: end.toISOString(), active: hour >= 20 || hour < 4 };
+}
+
+async function syncScheduledSession(client, guild, now = new Date()) {
+  if (scheduleRunning) return;
+  scheduleRunning = true;
+  try {
+    const window = scheduledWindow(now);
+    let data = store.load();
+    if (!data.club) return;
+    if (data.session?.scheduledEndAt && now >= new Date(data.session.scheduledEndAt)) {
+      await stopSession(client, guild, 'scheduled_end', data.session.scheduledEndAt);
+      data = store.load();
+    }
+    if (window.active && !data.session && data.lastSession?.scheduleKey !== window.startedAt) {
+      store.update(next => {
+        next.session = { startedAt: window.startedAt, scheduledEndAt: window.endedAt,
+          scheduleKey: window.startedAt, startedBy: 'automatic', baselineMatchIds: [] };
+        return next;
+      });
+      await refreshPanels(client, guild);
+      await captureWindow(client, guild, store.load().session);
+    } else if (window.active && data.session && !data.session.scheduledEndAt) {
+      store.update(next => {
+        if (next.session) Object.assign(next.session, { scheduledEndAt: window.endedAt, scheduleKey: window.startedAt });
+        return next;
+      });
+    }
+  } finally { scheduleRunning = false; }
 }
 
 function formatBerlin(value) {
@@ -253,7 +295,7 @@ async function ensureAdminPanel(client, guild) {
   const linked = members.filter((member) => String(data.links[member.id]?.clubId) === String(data.club?.clubId)).length;
   const session = data.session;
   const status = session
-    ? `🟢 **Wertung läuft**\nGestartet: ${formatBerlin(session.startedAt)} von <@${session.startedBy}>`
+    ? `🟢 **Wertung läuft**\nGestartet: ${formatBerlin(session.startedAt)} ${session.startedBy === 'automatic' ? 'automatisch' : 'von <@' + session.startedBy + '>'}`
     : '🔴 **Wertung ausgeschaltet**';
   const club = data.club
     ? `**EA-Club:** ${data.club.name}\n**Plattform:** ${data.club.platformLabel}\n**Interne Club-ID:** ${data.club.clubId}`
@@ -261,7 +303,7 @@ async function ensureAdminPanel(client, guild) {
   const embed = new EmbedBuilder()
     .setColor(ACCENT_COLOR)
     .setTitle('👑 Loco Power Ranking · Admin')
-    .setDescription([status, '', club, '', `**Verknüpft: ${linked}/${members.length}**`, lines.join('\n') || 'Keine Loco-Squad-Spieler gefunden.'].join('\n'))
+    .setDescription([status, '⏰ Automatisch täglich 20:00–04:00 Uhr · deutsche Zeit · Prüfung alle 10 Minuten', '', club, '', `**Verknüpft: ${linked}/${members.length}**`, lines.join('\n') || 'Keine Loco-Squad-Spieler gefunden.'].join('\n'))
     .setFooter({ text: 'Die Club-ID wird automatisch über die EA-Clubsuche ermittelt.' })
     .setTimestamp();
   const message = await upsertBotMessage(target, '👑 Loco Power Ranking · Admin', {
@@ -419,7 +461,7 @@ async function captureWindow(client, guild, window) {
     const matches = await getFriendlyMatches(data.club.clubId, data.club.platform, 50);
     const baseline = new Set(window.baselineMatchIds || []);
     const startMs = new Date(window.startedAt).getTime();
-    const endMs = window.endedAt ? new Date(window.endedAt).getTime() : Infinity;
+    const endMs = window.endedAt || window.scheduledEndAt ? new Date(window.endedAt || window.scheduledEndAt).getTime() : Infinity;
     let added = 0;
     store.update((next) => {
       for (const match of matches) {
@@ -461,10 +503,10 @@ async function startSession(client, guild, userId) {
   return session;
 }
 
-async function stopSession(client, guild, reason = 'manual') {
+async function stopSession(client, guild, reason = 'manual', endedAt = new Date().toISOString()) {
   const before = store.load();
   if (!before.session) throw new Error('Die Wertung läuft aktuell nicht.');
-  const window = { ...before.session, endedAt: new Date().toISOString() };
+  const window = { ...before.session, endedAt };
   const capture = await captureWindow(client, guild, window);
   store.update((next) => {
     next.lastSession = { ...window, stoppedReason: reason };
@@ -927,6 +969,7 @@ module.exports = function installPowerRankingHook() {
         const admin = await channel(client, CHANNELS.admin);
         const guild = admin?.guild;
         if (!guild) throw new Error('Admin-Panel-Kanal nicht erreichbar.');
+        await syncScheduledSession(client, guild);
         await archiveWeekIfNeeded(client, guild);
         await refreshPanels(client, guild);
         console.log('[power-ranking] Loco Power Ranking aktiv.');
@@ -955,7 +998,7 @@ module.exports = function installPowerRankingHook() {
       const weekTimer = setInterval(async () => {
         try {
           const admin = await channel(client, CHANNELS.admin);
-          if (admin?.guild) await archiveWeekIfNeeded(client, admin.guild);
+          if (admin?.guild) { await syncScheduledSession(client, admin.guild); await archiveWeekIfNeeded(client, admin.guild); }
         } catch (error) {
           console.error('[power-ranking] Wochenwechsel fehlgeschlagen:', error.message);
         }
@@ -977,6 +1020,7 @@ module.exports = function installPowerRankingHook() {
 };
 
 module.exports._test = {
+  scheduledWindow, syncScheduledSession,
   adminButtons, adminPlayerSelectionPayload, assignManualProfile, handleInteraction,
   aggregateRanking,
   availablePlayers,
