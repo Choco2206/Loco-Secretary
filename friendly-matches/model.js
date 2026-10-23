@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizePosition } = require('../power-ranking/scoring');
+const { decodeEvents } = require('./events');
 const CLUB_ID = '18360';
 const CHANNEL_ID = '1559992305467916399';
 const PLATFORM = 'common-gen5';
@@ -38,6 +39,7 @@ function sum(rows, key) {
 }
 function parseTeam(id, club, rawPlayers) {
   const players = Object.entries(rawPlayers || {}).map(([playerId, p]) => ({
+    events: decodeEvents(p),
     id: playerId, name: String(p.playername ?? p.playerName ?? p.name ?? playerId),
     position: normalizePosition(p.pos ?? p.position), rating: number(p.rating),
     goals: number(p.goals), assists: number(p.assists),

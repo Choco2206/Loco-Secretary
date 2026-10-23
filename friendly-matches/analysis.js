@@ -1,10 +1,11 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const ANALYSIS_VERSION = 3;
+const ANALYSIS_VERSION = 4;
+const { positionLabel } = require('./lineup');
 function valid(n) { return typeof n === 'number' && Number.isFinite(n) && n >= 0; }
 function total(players, key) { return players.length && players.every(p => valid(p[key])) ? players.reduce((sum, p) => sum + p[key], 0) : null; }
 function fmt(n, digits = 0) { return valid(n) ? n.toLocaleString('de-DE', { maximumFractionDigits: digits }) : '–'; }
-function name(p) { return String(p.name || 'Spieler').slice(0, 40).replace(/([\\*_`~|<>])/g, '\\$1'); }
+function name(p) { return String(`${p.name || 'Spieler'}${p.lineupPosition ? ` · ${p.lineupPosition}` : ''}`).slice(0, 40).replace(/([\\*_`~|<>])/g, '\\$1'); }
 function rate(made, attempts) { return valid(made) && valid(attempts) && attempts > 0 && made <= attempts ? 100 * made / attempts : null; }
 function passing(team, position) {
   const rows = position ? team.players.filter(p => p.position === position) : team.players;
@@ -111,6 +112,8 @@ function coachingFocus(match) {
   const own = tackles(match.own); const opp = tackles(match.opponent);
   if (notes.length < 2 && own.attempts >= 10 && own.quote !== null && own.quote < 40 && (opp.quote === null || own.quote < opp.quote)) notes.push('**Defensivarbeit:** erfolglose Tacklings mit der Absicherung durch Mitspieler zusammen anschauen.');
   if (notes.length < 2 && valid(match.opponent.shots) && valid(match.own.shots) && match.opponent.shots > match.own.shots) notes.push('**Gegenabschlüsse:** die Situationen vor gegnerischen Schüssen als Team analysieren.');
+  const losses = match.own.players.filter(p => p.events?.lostDef >= 3).sort((a,b) => b.events.lostDef - a.events.lostDef)[0];
+  if (losses) notes.unshift(`**Ballverluste:** Bei ${name(losses)} sind ${losses.events.lostDef} Verluste im eigenen Drittel erfasst. Diese Szenen auf Anspielbarkeit und Passentscheidungen prüfen; die Zähler belegen keine direkte Gegentorursache.`);
   return notes.slice(0, 2).join('\n') || 'Aus diesen Zahlen ergibt sich kein eindeutiger einzelner Schwachpunkt. Die gegentor- und abschlussrelevanten Szenen gemeinsam anschauen.';
 }
 function fitAnalysis(embed, budget = 6000) {
@@ -123,6 +126,32 @@ function fitAnalysis(embed, budget = 6000) {
   }));
   return embed;
 }
+function playerDetails(p) {
+  const lines = [`EA-Note ${fmt(p.rating, 1)} · Tore ${fmt(p.goals)} · Vorlagen ${fmt(p.assists)}`];
+  const q = rate(p.passes, p.passAttempts);
+  lines.push(`Pässe ${fmt(p.passes)}/${fmt(p.passAttempts)} · ${fmt(q, 1)} %`);
+  const e = p.events;
+  if (!e) {
+    lines.push(`Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · ${p.position === 'goalkeeper' ? `Paraden ${fmt(p.saves)}` : `Schüsse ${fmt(p.shots)}`}`);
+    return lines.join('\n');
+  }
+  if (e.passingComplete) {
+    lines.push(`Angekommen → ${e.forward} · ← ${e.backward} · ↔ ${e.sideways}`);
+    lines.push(`Kurz/mittel/lang ${e.short}/${e.medium}/${e.long} · Flanken ${e.crosses}`);
+  } else lines.push('Passereignisse unvollständig; keine Richtungsaufteilung.');
+  if (p.position === 'goalkeeper') lines.push(`Paraden ${fmt(p.saves)} · abgefangen ${e.interceptions}`);
+  else if (p.position === 'forward') lines.push(`Schüsse ${fmt(p.shots)} · Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · Luftduelle gewonnen ${e.aerialAttack + e.aerialDefense}`);
+  else lines.push(`Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · abgefangen ${e.interceptions} · Luftduelle gewonnen ${e.aerialAttack + e.aerialDefense}`);
+  if (['midfielder', 'forward'].includes(p.position)) lines.push(`Dribblings ${e.dribbles} · Schnittstellenpässe ${e.passingComplete ? e.through : '–'} · zweite Vorlagen ${e.secondAssists}`);
+  lines.push(`Ballgewinne E/M/O ${e.wonDef}/${e.wonMid}/${e.wonAttack} · Verluste ${e.lostDef}/${e.lostMid}/${e.lostAttack}`);
+  return lines.join('\n');
+}
+function eventSummary(match) {
+  const rows = match.own.players.filter(p => p.events);
+  if (!rows.length) return null;
+  const n = key => rows.reduce((sum, p) => sum + p.events[key], 0);
+  return `Ereignisse für ${rows.length}/${match.own.players.length} Spieler vorhanden.\nBallgewinne eigenes/mittleres/offensives Drittel: ${n('wonDef')}/${n('wonMid')}/${n('wonAttack')} · Ballverluste: ${n('lostDef')}/${n('lostMid')}/${n('lostAttack')}\nAbgefangene Bälle: ${n('interceptions')} · gewonnene Luftduelle offensiv/defensiv: ${n('aerialAttack')}/${n('aerialDefense')}\nEreigniszähler sind eine ergänzende, möglicherweise unvollständige Aufschlüsselung. Keine Laufwege oder empfangenen Pässe.`;
+}
 function buildAnalysis(match, budget = 6000) {
   const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle('🔎 Matchanalyse · Loco Squad');
   const labels = ['⚙️ Spielaufbau im Mittelfeld', '🎯 Chancenverwertung', '🛡️ Defensive Stabilität', '🧤 Torwartleistung'];
@@ -132,8 +161,19 @@ function buildAnalysis(match, budget = 6000) {
   } else {
     [midfield, finishing, defense, goalkeeper].forEach((analyze, index) => embed.addFields({ name: labels[index], value: analyze(match).slice(0, 1024) }));
     embed.addFields({ name: '🎯 Schwerpunkte für die Nachbesprechung', value: coachingFocus(match) });
+    if (match.own.players.some(p => p.events || p.lineupPosition)) {
+      const overview = eventSummary(match);
+      if (overview) embed.addFields({ name: '📊 Balleroberung und Ballverluste', value: overview });
+      embed.setDescription('→/←/↔ = angekommene Vorwärts-/Rückwärts-/Seitwärtspässe. E/M/O = eigenes/mittleres/offensives Drittel. Positionen laut passender finaler Aufstellung; sonst EA-Gruppe. Ereigniszuordnungen aus Community-Forschung.');
+      for (const player of match.own.players.slice(0, 18)) {
+        embed.addFields({ name: `${positionLabel(player)} · ${name({ ...player, lineupPosition: null })}`.slice(0, 256), value: playerDetails(player) });
+      }
+    }
   }
   embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Fokus Loco Squad · Ursachen und Chancenqualität erfordern Spielszenen` });
+  if (embed.data.fields.length > 5) {
+    embed.data.fields.slice(0, 5).forEach(f => { if (f.value.length > 220) f.value = f.value.split('\n').slice(0, 2).join('\n').slice(0, 220); });
+  }
   return fitAnalysis(embed, budget);
 }
-module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus };
+module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus, playerDetails, eventSummary };

@@ -2,12 +2,13 @@
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { POSITIONS, percent } = require('./model');
+const { percent } = require('./model');
 const { buildAnalysis } = require('./analysis');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
-const LAYOUT_VERSION = 6;
+const LAYOUT_VERSION = 7;
+const { positionLabel } = require('./lineup');
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
 function text(ctx, value, x, y, size = 20, color = '#ecedf0', width = 900, align = 'left') {
@@ -84,7 +85,7 @@ function renderTable(team, logo = null) {
     if (p.motm) { ctx.fillStyle = '#d7ff56'; ctx.beginPath(); ctx.roundRect(420, y - 11, 66, 22, 10); ctx.fill(); text(ctx, 'MOTM', 453, y, 12, '#141a08', 58, 'center'); }
     const [bg, fg] = COLORS[p.position] || ['#303640', '#b9c1cb'];
     ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(514, y - 13, 54, 26, 5); ctx.fill();
-    text(ctx, POSITIONS[p.position] || '?', 541, y, 16, fg, 50, 'center');
+    text(ctx, positionLabel(p), 541, y, 16, fg, 50, 'center');
     const ratingColor = p.rating === null ? '#9ca7b5' : p.rating >= 8 ? '#d7ff56' : p.rating < 7 ? '#ff9338' : '#ecedf0';
     text(ctx, display(p.rating, 1), xs[2], y, 19, ratingColor, 90, 'right');
     text(ctx, p.goals === 0 ? '–' : display(p.goals), xs[3], y, 18, '#ecedf0', 90, 'right');

@@ -74,7 +74,7 @@ test('old analysis is replaced in place with comparative analysis while preservi
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save);
   assert.equal(h.edits, 1); assert.equal(h.message.embeds.length, 3);
   assert.deepEqual(h.message.embeds[1], h.original[1]);
-  assert.match(h.message.embeds[2].footer.text, /Analyse v3/);
+  assert.match(h.message.embeds[2].footer.text, /Analyse v4/);
   assert.match(h.message.embeds[2].fields[0].value, /Mittelfeld Loco/);
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save); assert.equal(h.edits, 1);
 });
@@ -136,7 +136,7 @@ test('damaged posts regain score and both tables with real PNG uploads and lates
   assert.equal(payload.embeds[0].data.image.url, 'attachment://ergebnis.png');
   assert.equal(payload.embeds[2].data.image.url, 'attachment://loco-squad.png');
   assert.equal(payload.embeds[3].data.image.url, 'attachment://gegner.png');
-  assert.match(payload.embeds[4].data.footer.text, /Analyse v3/);
+  assert.match(payload.embeds[4].data.footer.text, /Analyse v4/);
   assert.equal(h.data.posted[fixture.matchId].imageRepairVersion, 1);
   await backfillAnalysis(h.channel, 'bot', [fixture], h.data, h.save, options);
   assert.equal(edits, 1);

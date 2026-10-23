@@ -3,6 +3,7 @@ const { MIN_MATCH_SECONDS, isPublishableMatch, isActive, localParts, POLL_MS, ca
 const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
 const { buildPayload, LAYOUT_VERSION } = require('./renderer');
+const { createLineupResolver } = require('./lineup');
 const previewRequest = require('./preview-request.json');
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { buildAnalysis, ANALYSIS_VERSION } = require('./analysis');
@@ -100,6 +101,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
   for (const [id, entry] of Object.entries(data.posted)) {
     if (entry.suppressed) continue;
     const match = available.get(id);
+    if (match && options.enrichMatch) await options.enrichMatch(match);
     const short = knownShortDuration(entry, match);
     if (entry.imageRepairVersion === 1 && entry.durationPolicyVersion === 1 && short === null && (entry.layoutVersion || 1) >= LAYOUT_VERSION && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
     try {
@@ -117,7 +119,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
       }
       entry.durationPolicyVersion = 1;
       if (match?.durationSeconds > 0) entry.durationSeconds = match.durationSeconds;
-      if (match && entry.imageRepairVersion !== 1) {
+      if (match && (entry.imageRepairVersion !== 1 || (match.own.players.some(p => p.lineupPosition) && (entry.layoutVersion || 1) < LAYOUT_VERSION))) {
         const payload = await (options.buildPayload || buildPayload)(match);
         await message.edit({ ...payload, attachments: [] });
         entry.layoutVersion = LAYOUT_VERSION;
@@ -160,6 +162,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
 
 function createService(client, options = {}) {
   const deps = {
+    enrichMatch: createLineupResolver(client),
     load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest, onMatches: () => {},
     getChannel: () => client.channels.fetch(CHANNEL_ID),
     recover: (channel, now) => recoverPosted(channel, client.user.id, now),
@@ -167,28 +170,41 @@ function createService(client, options = {}) {
   };
   let running = false;
   let lastSlot = null;
+  let previewDone = false;
   return {
     async tick(now = new Date()) {
       const p = localParts(now);
       // One last check at 04:00 captures the final games of the evening.
       const closing = Number(p.hour) === 4 && Number(p.minute) === 0;
-      if ((!isActive(now) && !closing) || running) return;
+      const latestPreview = deps.previewRequest?.latest && !previewDone && now.getTime() < new Date(deps.previewRequest.expiresAt).getTime();
+      if ((!isActive(now) && !closing && !latestPreview) || running) return;
       const slot = Math.floor(now.getTime() / POLL_MS);
       if (slot === lastSlot) return;
       lastSlot = slot;
       running = true;
       try {
         const data = deps.load();
+        const previewKey = deps.previewRequest?.key;
+        if (latestPreview && previewKey && data.previewRequests?.[previewKey]) {
+          previewDone = true;
+          if (!isActive(now) && !closing) return;
+        }
         const channel = await deps.getChannel();
         if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${CHANNEL_ID} nicht erreichbar.`);
         const recovered = await deps.recover(channel, now);
         for (const [id, entry] of Object.entries(recovered)) data.posted[id] = { ...data.posted[id], ...entry };
-        if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save, { buildPayload: deps.buildPayload });
+        if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         await deps.onMatches(raw, now);
-        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload });
+        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         const matches = candidates(raw, now, data.posted);
-        const refresh = deps.previewRequest;
+        const latest = deps.previewRequest?.latest ? raw.map(parseMatch).filter(Boolean)
+          .filter(m => Date.parse(m.timestamp) <= now.getTime()).sort((a,b) => b.timestamp.localeCompare(a.timestamp))[0] : null;
+        const resolvedRequest = deps.previewRequest?.latest
+          ? (latest && isPublishableMatch(latest) ? { ...deps.previewRequest, matchId: latest.id } : null)
+          : deps.previewRequest;
+        if (latestPreview && !resolvedRequest) console.log('[friendly-matches] Letzter-Friendly-Test wartet: EA liefert kein auswertbares Friendly für den konfigurierten Club.');
+        const refresh = resolvedRequest;
         const existing = refresh && data.posted[refresh.matchId];
         if (refresh?.refreshLayoutVersion && existing && (existing.layoutVersion || 1) < refresh.refreshLayoutVersion
           && now.getTime() < new Date(refresh.expiresAt).getTime()) {
@@ -196,7 +212,7 @@ function createService(client, options = {}) {
           if (!existing.suppressed && isPublishableMatch(preview)) {
             const message = await channel.messages.fetch(existing.messageId);
             if (message.author?.id !== client.user.id) throw new Error('Vorschau-Nachricht gehört nicht diesem Bot.');
-            await message.edit({ ...await deps.buildPayload(preview), attachments: [] });
+            await message.edit({ ...await deps.buildPayload(await deps.enrichMatch(preview)), attachments: [] });
             existing.layoutVersion = LAYOUT_VERSION;
             deps.save(data);
             console.log(`[friendly-matches] Vorschau ${preview.id} auf Layout ${existing.layoutVersion} aktualisiert.`);
@@ -204,7 +220,7 @@ function createService(client, options = {}) {
         }
         // A short-lived, explicitly requested preview may bypass the evening filter once.
         // It uses the normal match marker, so Discord recovery also prevents replay after redeploy.
-        const request = deps.previewRequest;
+        const request = resolvedRequest;
         if (request && now.getTime() < new Date(request.expiresAt).getTime() && !data.posted[request.matchId]) {
           const preview = raw.map(parseMatch).find(match => match?.id === request.matchId);
           if (isPublishableMatch(preview) && new Date(preview.timestamp) <= now && !matches.some(match => match.id === preview.id)) {
@@ -218,10 +234,16 @@ function createService(client, options = {}) {
         }
         deps.save(data);
         for (const match of matches) {
+          await deps.enrichMatch(match);
           const message = await channel.send(await deps.buildPayload(match));
           data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, durationSeconds: match.durationSeconds, durationPolicyVersion: 1, imageRepairVersion: 1, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
+        }
+        if (latestPreview && resolvedRequest && data.posted[resolvedRequest.matchId]) {
+          data.previewRequests = { ...(data.previewRequests || {}), [previewKey]: { matchId: resolvedRequest.matchId, completedAt: now.toISOString() } };
+          deps.save(data); previewDone = true;
+          console.log(`[friendly-matches] Letzter-Friendly-Test abgeschlossen: ${resolvedRequest.matchId}.`);
         }
         return matches.length;
       } finally { running = false; }

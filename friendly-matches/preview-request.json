@@ -1,5 +1,6 @@
 {
-  "matchId": "99102133640243",
-  "expiresAt": "2026-10-14T20:30:00.000Z",
-  "refreshLayoutVersion": 2
+  "latest": true,
+  "key": "detailed-analysis-v4-2026-10-23",
+  "expiresAt": "2026-10-26T22:59:00.000Z",
+  "refreshLayoutVersion": 7
 }

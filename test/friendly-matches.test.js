@@ -194,3 +194,18 @@ test('one-off preview cannot bypass minimum duration', async () => {
   await h.service.tick(new Date('2026-10-14T20:00:00Z'));
   assert.equal(h.sends.length, 0);
 });
+
+test('latest Friendly preview runs once in daytime and survives a restart without replay', async () => {
+ const request = {latest:true,key:'analysis-test',expiresAt:'2026-10-16T00:00:00Z',refreshLayoutVersion:7};
+ const h = harness({ previewRequest:request, enrichMatch:async m=>m, fetchMatches:async()=>[match('latest','2026-10-14T19:55:00Z')] });
+ await h.service.tick(new Date('2026-10-15T10:00:00Z'));
+ assert.deepEqual(h.sends.map(x=>x.id),['latest']);
+ assert.equal(h.data.previewRequests['analysis-test'].matchId,'latest');
+ await h.service.tick(new Date('2026-10-15T10:10:00Z')); assert.equal(h.sends.length,1);
+ const restarted = harness({previewRequest:request,load:()=>structuredClone(h.data),fetchMatches:async()=>{throw Error('must not poll after completed daytime preview');}});
+ await restarted.service.tick(new Date('2026-10-15T10:20:00Z')); assert.equal(restarted.sends.length,0);
+});
+test('latest preview with no EA games stays pending without inventing a result', async () => {
+ const h = harness({previewRequest:{latest:true,key:'empty',expiresAt:'2026-10-16T00:00:00Z'},fetchMatches:async()=>[]});
+ await h.service.tick(new Date('2026-10-15T10:00:00Z')); assert.equal(h.sends.length,0);assert.equal(h.data.previewRequests,undefined);
+});
