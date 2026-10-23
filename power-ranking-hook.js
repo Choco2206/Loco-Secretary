@@ -1,5 +1,7 @@
 'use strict';
 
+// Daily automatic ranking: 20:00–04:00 Europe/Berlin.
+
 const {
   ActionRowBuilder,
   ButtonBuilder,
