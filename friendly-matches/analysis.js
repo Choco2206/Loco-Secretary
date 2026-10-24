@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const ANALYSIS_VERSION = 4;
+const ANALYSIS_VERSION = 5;
 const { positionLabel } = require('./lineup');
 function valid(n) { return typeof n === 'number' && Number.isFinite(n) && n >= 0; }
 function total(players, key) { return players.length && players.every(p => valid(p[key])) ? players.reduce((sum, p) => sum + p[key], 0) : null; }
@@ -161,8 +161,10 @@ function buildAnalysis(match, budget = 6000) {
   } else {
     [midfield, finishing, defense, goalkeeper].forEach((analyze, index) => embed.addFields({ name: labels[index], value: analyze(match).slice(0, 1024) }));
     embed.addFields({ name: '🎯 Schwerpunkte für die Nachbesprechung', value: coachingFocus(match) });
-    if (match.own.players.some(p => p.events || p.lineupPosition)) {
+    if (match.own.players.length) {
       const overview = eventSummary(match);
+      const missing = match.own.players.filter(p => !p.events).length;
+      if (missing) embed.addFields({ name: 'ℹ️ Zusätzliche Ereignisdaten', value: `Für ${missing}/${match.own.players.length} Spieler fehlen verlässlich lesbare Ereignisdaten. Passrichtungen, Flanken und Luftduelle sind für diese Spieler nicht verfügbar. Die normalen EA-Werte werden trotzdem ausgewertet.` });
       if (overview) embed.addFields({ name: '📊 Balleroberung und Ballverluste', value: overview });
       embed.setDescription('→/←/↔ = angekommene Vorwärts-/Rückwärts-/Seitwärtspässe. E/M/O = eigenes/mittleres/offensives Drittel. Positionen laut passender finaler Aufstellung; sonst EA-Gruppe. Ereigniszuordnungen aus Community-Forschung.');
       for (const player of match.own.players.slice(0, 18)) {

@@ -25,7 +25,8 @@ test('final lineup maps EA identities, respects the match date, substitutes, dup
  resolveLineup(match,[snap],links); assert.equal(match.lineupSource,'final'); assert.ok(players.every(p=>p.lineupPosition));
  match.own.players.push({id:'helper',position:'midfielder'}); resolveLineup(match,[snap],links); assert.equal(match.own.players.at(-1).lineupPosition,undefined);
  resolveLineup(match,[{...snap,published:Date.parse(match.timestamp)+1}],links); assert.ok(players.every(p=>!p.lineupPosition));
- resolveLineup(match,[snap],{...links,duplicate:{playerId:players[0].id}}); assert.equal(match.lineupSource,null);
+ resolveLineup(match,[snap],{...links,duplicate:{playerId:players[0].id}}); assert.equal(players[0].lineupPosition,undefined);
+ assert.ok(players.slice(1).every(p=>p.lineupPosition));
 });
 test('snapshot is read only from a dated final publication and validates unique Discord users', () => {
  const message = {id:'x',author:{bot:true},embeds:[{footer:{text:'Loco Lineup · v1 · nightcup'},timestamp:'2026-10-23T18:00:00Z',description:'Datum: 23.10.2026\nStart: 23:00',fields:[{name:'RM',value:'<@123>'}]}]};
@@ -42,4 +43,30 @@ test('11 detailed player rows fit Discord limits and retain missing-data and eve
  const partial=structuredClone(m); partial.own.players[0].events=null;
  assert.ok(!JSON.stringify(buildAnalysis(partial).toJSON()).includes('empfangene Pässe:'));
  m.termination='early'; assert.ok(buildAnalysis(m).toJSON().fields.every(f=>/Keine reguläre/.test(f.value)));
+});
+
+test('every EA player receives details even without event data and without a lineup link',()=>{
+ const m=parseMatch(structuredClone(fixture));assert.ok(m.own.players.every(p=>!p.events&&!p.lineupPosition));
+ const result=buildAnalysis(m).toJSON();
+ assert.equal(result.fields.filter(f=>/ · /.test(f.name)).length,m.own.players.length);
+ assert.ok(result.fields.some(f=>/Ereignisdaten/.test(f.name)&&/fehlen/.test(f.value)));
+ assert.ok(result.fields.filter(f=>/ · /.test(f.name)).every(f=>/Pässe/.test(f.value)&&/Tacklings/.test(f.value)));
+});
+test('00:15 Cup uses the previous evening until 04:00, with no loss of substitute stats',()=>{
+ const {eveningKey}=require('../friendly-matches/lineup');
+ const m=parseMatch(structuredClone(fixture));m.timestamp='2026-10-23T23:30:00Z'; // 24 October 01:30 in Berlin
+ const player=m.own.players.find(p=>p.position==='midfielder');
+ const base={day:'2026-10-23',start:15,published:Date.parse('2026-10-23T20:00:00Z'),positions:{'123':'RM'},messageId:'cup'};
+ assert.equal(eveningKey(base),'2026-10-23');resolveLineup(m,[base],{'123':{playerId:player.id}});assert.equal(player.lineupPosition,'RM');
+ const accurateDate={...base,day:'2026-10-24'};assert.equal(eveningKey(accurateDate),'2026-10-23');
+ assert.equal(m.own.players.length,fixture.players['18360']?Object.keys(fixture.players['18360']).length:0);
+ m.timestamp='2026-10-24T03:00:00Z';resolveLineup(m,[base],{'123':{playerId:player.id}});assert.equal(player.lineupPosition,undefined);
+});
+test('PNG snapshots read across both repos without changing image content and detect corruption',()=>{
+ const {createCanvas}=require('@napi-rs/canvas');const {encodeSnapshot}=require('../friendly-matches/png-lineup');
+ const {decodeSnapshot}=require('../friendly-matches/png-lineup');const {parseDocument}=require('../friendly-matches/lineup');
+ const png=createCanvas(2,2).toBuffer('image/png');
+ const result=encodeSnapshot(png,{version:2,eventId:'nightcup',day:'23.10.2026',start:'00:15',publishedAt:'2026-10-23T20:00:00Z',positions:{'123':'RM'}});
+ assert.equal(parseDocument(decodeSnapshot(result),'final').positions['123'],'RM');
+ result[40]^=1;assert.equal(decodeSnapshot(result),null);
 });

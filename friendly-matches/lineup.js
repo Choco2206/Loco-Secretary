@@ -1,5 +1,6 @@
 'use strict';
-const { localParts, POSITIONS } = require('./model');
+const { localParts, POSITIONS, sessionKey, isActive } = require('./model');
+const { decodeSnapshot } = require('./png-lineup');
 const CHANNELS = ['1544644644179152956', '1544644649354797087'];
 const GROUPS = { TW: 'goalkeeper', LIV: 'defender', ZIV: 'defender', RIV: 'defender', LZDM: 'midfielder', RZDM: 'midfielder', ZOM: 'midfielder', LM: 'midfielder', RM: 'midfielder', LS: 'forward', RS: 'forward' };
 function positionLabel(player) { return player.lineupPosition || POSITIONS[player.position] || '?'; }
@@ -20,11 +21,33 @@ function parseSnapshot(message) {
   }
   return { day, start: +start[1] * 60 + +start[2], published, positions, messageId: message.id };
 }
+function parseDocument(meta, messageId) {
+  if (meta?.version !== 2 || !meta.positions || typeof meta.positions !== 'object') return null;
+  const date = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(meta.day || '');
+  const start = /^(\d{2}):(\d{2})$/.exec(meta.start || '');
+  const published = Date.parse(meta.publishedAt);
+  if (!date || !start || +start[1]>23 || +start[2]>59 || !Number.isFinite(published)) return null;
+  const day=`${date[3]}-${date[2]}-${date[1]}`;
+  if (!Number.isFinite(Date.parse(`${day}T12:00:00Z`))) return null;
+  const positions={};const occupied=new Set();
+  for(const [user,pos] of Object.entries(meta.positions)) {
+    if(!/^\d+$/.test(user)||!GROUPS[pos]||occupied.has(pos))return null;
+    occupied.add(pos);positions[user]=pos;
+  }
+  return {day,start:+start[1]*60 + +start[2],published,positions,messageId};
+}
+function eveningKey(snapshot) {
+  const published=localParts(new Date(snapshot.published));
+  const publishedDay=`${published.year}-${published.month}-${published.day}`;
+  const shiftDay = (day,n) => {const d=new Date(`${day}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+  if(snapshot.start>=4*60)return snapshot.day;
+  // 00:15 may be entered using the evening's date, as in the Cup panel.
+  if(publishedDay===snapshot.day && +published.hour>=4)return snapshot.day;
+  if(publishedDay===shiftDay(snapshot.day,1) && +published.hour<4)return snapshot.day;
+  return shiftDay(snapshot.day,-1);
+}
 function resolveLineup(match, snapshots, links) {
-  const p = localParts(new Date(match.timestamp));
-  const localDay = `${p.year}-${p.month}-${p.day}`;
-  const matchMinute = +p.hour * 60 + +p.minute;
-  const dayNumber = s => Date.parse(`${s}T12:00:00Z`) / 86400000;
+  const evening = sessionKey(new Date(match.timestamp));
   const byId = new Map();
   for (const [discordId, link] of Object.entries(links || {})) {
     if (!link.playerId) continue;
@@ -32,10 +55,9 @@ function resolveLineup(match, snapshots, links) {
     byId.set(key, byId.has(key) ? null : discordId);
   }
   const eligible = snapshots.filter(s => {
-    const delta = (dayNumber(localDay) - dayNumber(s.day)) * 1440 + matchMinute - s.start;
-    return s.published <= Date.parse(match.timestamp) && delta >= 0 && delta <= 8 * 60;
+    return isActive(new Date(match.timestamp)) && s.published <= Date.parse(match.timestamp) && eveningKey(s) === evening;
   }).map(s => ({ ...s, overlap: match.own.players.filter(p => s.positions[byId.get(p.id)]).length }))
-    .filter(s => s.overlap >= 3).sort((a, b) => b.published - a.published);
+    .filter(s => s.overlap >= 1).sort((a, b) => b.published - a.published);
   const chosen = eligible[0];
   for (const player of match.own.players) {
     delete player.lineupPosition;
@@ -47,23 +69,37 @@ function resolveLineup(match, snapshots, links) {
   return match;
 }
 function createLineupResolver(client, loadLinks = () => require('../power-ranking/store').load().links) {
-  let cache = null; let at = 0;
+  let cache = []; let at = 0; let cachedEvening = null;
+  const images = new Map();
   return async match => {
+    const evening=sessionKey(new Date(match.timestamp));
     try {
-      if (!cache || Date.now() - at > 60000) {
+      if (cachedEvening !== evening || Date.now() - at > 10*60000) {
+        cache=[];at=Date.now();cachedEvening=evening;
         const rows = [];
         for (const id of CHANNELS) {
           const channel = await client.channels.fetch(id);
           if (!channel?.messages?.fetch) throw new Error(`Aufstellungskanal ${id} nicht lesbar`);
-          let before;
-          for (let page = 0; page < 3; page++) {
-            const messages = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
-            for (const message of messages.values()) { const row = parseSnapshot(message); if (row) rows.push(row); }
-            if (messages.size < 100) break;
-            before = [...messages.values()].at(-1).id;
+          const messages=await channel.messages.fetch({limit:100});
+          for(const message of messages.values()) {
+            if(!message.author?.bot)continue;
+            const old=parseSnapshot(message);if(old){rows.push(old);continue;}
+            const files=[...(message.attachments?.values()||[])];
+            const file=files.find(a=>/^lineup-.*-final\.png$/.test(a.name||''));if(!file)continue;
+            const stamps=[message.createdTimestamp,message.editedTimestamp];
+            if(!stamps.some(stamp=>Number.isFinite(stamp)&&stamp<=Date.parse(match.timestamp)&&Date.parse(match.timestamp)-stamp<=36*3600000))continue;
+            let meta=images.get(file.url);
+            if(meta===undefined){
+              const response=await fetch(file.url,{signal:AbortSignal.timeout(15000)});
+              if(!response.ok)continue;
+              if(Number(response.headers.get('content-length'))>12*1024*1024)continue;
+              meta=decodeSnapshot(Buffer.from(await response.arrayBuffer()));images.set(file.url,meta);
+              if(images.size>100)images.delete(images.keys().next().value);
+            }
+            const row=parseDocument(meta,message.id);if(row)rows.push(row);
           }
         }
-        cache = rows; at = Date.now();
+        cache=rows;
       }
       return resolveLineup(match, cache, loadLinks());
     } catch (error) {
@@ -72,4 +108,4 @@ function createLineupResolver(client, loadLinks = () => require('../power-rankin
     }
   };
 }
-module.exports = { positionLabel, parseSnapshot, resolveLineup, createLineupResolver };
+module.exports = { positionLabel, parseSnapshot, parseDocument, eveningKey, resolveLineup, createLineupResolver };
