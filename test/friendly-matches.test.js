@@ -100,7 +100,7 @@ test('renderer creates three PNG attachments and valid Discord embed sizes witho
   assert.deepEqual(renderTable(parsed.own).subarray(0, 4), png);
   assert.deepEqual((await renderScore(parsed, [null, null])).subarray(0, 4), png);
   const payload = await buildPayload(parsed, [null, null]);
-  assert.equal(payload.embeds[0].toJSON().image.url, 'attachment://ergebnis.png');
+  assert.equal(payload.embeds[0].toJSON().image.url, `attachment://ergebnis-${fixture.matchId}-v${require('../friendly-matches/renderer').LAYOUT_VERSION}.png`);
   assert.equal(payload.embeds[0].toJSON().fields, undefined);
   assert.equal(payload.embeds[1].toJSON().image, undefined);
   assert.equal(payload.files.length, 3); assert.equal(payload.embeds.length, 5);

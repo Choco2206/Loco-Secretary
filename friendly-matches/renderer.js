@@ -7,7 +7,7 @@ const { buildAnalysis } = require('./analysis');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
-const LAYOUT_VERSION = 8;
+const LAYOUT_VERSION = 9;
 const { positionLabel } = require('./lineup');
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
@@ -133,9 +133,11 @@ async function buildPayload(match, logos) {
     new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
     new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png')];
   const used = prior.reduce((n, e) => { const j = e.toJSON(); return n + (j.title?.length || 0) + (j.description?.length || 0) + (j.footer?.text?.length || 0) + (j.fields || []).reduce((v, f) => v + f.name.length + f.value.length, 0); }, 0);
+  const filenames = { 'ergebnis.png': `ergebnis-${match.id}-v${LAYOUT_VERSION}.png`, 'loco-squad.png': `loco-squad-${match.id}-v${LAYOUT_VERSION}.png`, 'gegner.png': `gegner-${match.id}-v${LAYOUT_VERSION}.png` };
+  for (const embed of prior) { const url = embed.data.image?.url; if (url?.startsWith('attachment://')) embed.setImage(`attachment://${filenames[url.slice(13)]}`); }
   return {
     embeds: [...prior, buildAnalysis(match, Math.max(500, 6000 - used))],
-    files: [new AttachmentBuilder(score, { name: 'ergebnis.png' }), new AttachmentBuilder(own, { name: 'loco-squad.png' }), new AttachmentBuilder(opponent, { name: 'gegner.png' })],
+    files: [new AttachmentBuilder(score, { name: filenames['ergebnis.png'] }), new AttachmentBuilder(own, { name: filenames['loco-squad.png'] }), new AttachmentBuilder(opponent, { name: filenames['gegner.png'] })],
     allowedMentions: { parse: [] },
   };
 }

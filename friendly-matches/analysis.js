@@ -1,6 +1,6 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const ANALYSIS_VERSION = 5;
+const ANALYSIS_VERSION = 6;
 const { positionLabel } = require('./lineup');
 function valid(n) { return typeof n === 'number' && Number.isFinite(n) && n >= 0; }
 function total(players, key) { return players.length && players.every(p => valid(p[key])) ? players.reduce((sum, p) => sum + p[key], 0) : null; }
@@ -126,6 +126,15 @@ function fitAnalysis(embed, budget = 6000) {
   }));
   return embed;
 }
+function playerAssessment(p) {
+  const q=rate(p.passes,p.passAttempts);
+  if(p.position==='goalkeeper') return valid(p.saves) && p.saves>0 ? `${p.saves} erfasste Paraden. Gegentore allein belegen keinen Torwartfehler.` : 'Torwartaktionen nur im Zusammenhang mit den zugelassenen Abschlüssen bewerten.';
+  if(p.position==='forward' && p.shots>=3 && p.goals===0) return `${p.shots} Abschlüsse ohne Tor: diese Abschlussszenen nachbesprechen.`;
+  if(q!==null && p.passAttempts>=10 && q<75) return `${p.passAttempts-p.passes} Zuspiele kamen nicht an. Anspielstationen und Passentscheidungen prüfen.`;
+  if(p.position==='defender' && p.tackleAttempts>=5 && rate(p.tackles,p.tackleAttempts)<50) return 'Viele Tacklingversuche blieben erfolglos. Timing und Absicherung gemeinsam prüfen.';
+  if(q!==null && p.passAttempts>=10 && q>=90) return 'Hohe Passsicherheit; die Gefährlichkeit der Zuspiele lässt sich daraus allein nicht ableiten.';
+  return p.passAttempts<10 ? 'Wenige Passaktionen: keine belastbare Aussage zur Einbindung allein aus dieser Stichprobe.' : 'Passquote und Zweikämpfe zusammen mit den jeweiligen Spielszenen betrachten.';
+}
 function playerDetails(p) {
   const lines = [`EA-Note ${fmt(p.rating, 1)} · Tore ${fmt(p.goals)} · Vorlagen ${fmt(p.assists)}`];
   const q = rate(p.passes, p.passAttempts);
@@ -133,7 +142,8 @@ function playerDetails(p) {
   const e = p.events;
   if (!e) {
     lines.push(`Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · ${p.position === 'goalkeeper' ? `Paraden ${fmt(p.saves)}` : `Schüsse ${fmt(p.shots)}`}`);
-    return lines.join('\n');
+    lines.push(playerAssessment(p));
+    return lines.filter(Boolean).join('\n');
   }
   if (e.passingComplete) {
     lines.push(`Angekommen → ${e.forward} · ← ${e.backward} · ↔ ${e.sideways}`);
@@ -164,9 +174,9 @@ function buildAnalysis(match, budget = 6000) {
     if (match.own.players.length) {
       const overview = eventSummary(match);
       const missing = match.own.players.filter(p => !p.events).length;
-      if (missing) embed.addFields({ name: 'ℹ️ Zusätzliche Ereignisdaten', value: `Für ${missing}/${match.own.players.length} Spieler fehlen verlässlich lesbare Ereignisdaten. Passrichtungen, Flanken und Luftduelle sind für diese Spieler nicht verfügbar. Die normalen EA-Werte werden trotzdem ausgewertet.` });
+      if (missing) embed.addFields({ name: 'ℹ️ Datengrundlage', value: 'Die Analyse verwendet die gelieferten Spielwerte. Zusätzliche Ereigniszähler für Passrichtungen, Flanken und Luftduelle liefert EA in diesem Spiel nicht vollständig.' });
       if (overview) embed.addFields({ name: '📊 Balleroberung und Ballverluste', value: overview });
-      embed.setDescription('→/←/↔ = angekommene Vorwärts-/Rückwärts-/Seitwärtspässe. E/M/O = eigenes/mittleres/offensives Drittel. Positionen laut passender finaler Aufstellung; sonst EA-Gruppe. Ereigniszuordnungen aus Community-Forschung.');
+      embed.setDescription(overview ? '→/←/↔ = angekommene Vorwärts-/Rückwärts-/Seitwärtspässe. E/M/O = eigenes/mittleres/offensives Drittel.' : 'Auswertung der tatsächlich erfassten Spieler. Genaue Position laut finaler Aufstellung, sonst EA-Positionsgruppe.');
       for (const player of match.own.players.slice(0, 18)) {
         embed.addFields({ name: `${positionLabel(player)} · ${name({ ...player, lineupPosition: null })}`.slice(0, 256), value: playerDetails(player) });
       }

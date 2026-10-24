@@ -17,7 +17,7 @@ test('analysis uses actual midfield totals and specific results from the referen
 });
 test('the fifth embed follows the opponent table, all Discord fields and message limits hold', async () => {
   const p = await buildPayload(match(), [null, null]); const embeds = p.embeds.map(e => e.toJSON());
-  assert.equal(embeds[3].image.url, 'attachment://gegner.png'); assert.equal(embeds[4].title, '🔎 Matchanalyse · Loco Squad');
+  assert.equal(embeds[3].image.url, `attachment://gegner-${fixture.matchId}-v${require('../friendly-matches/renderer').LAYOUT_VERSION}.png`); assert.equal(embeds[4].title, '🔎 Matchanalyse · Loco Squad');
   const length = embeds.reduce((sum, e) => sum + (e.title?.length || 0) + (e.description?.length || 0) + (e.footer?.text.length || 0) + (e.fields || []).reduce((n, f) => n + f.name.length + f.value.length, 0), 0);
   assert.ok(length < 6000); assert.ok(embeds.every(e => (e.fields || []).every(f => f.value.length <= 1024)));
 });

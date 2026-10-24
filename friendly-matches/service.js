@@ -4,8 +4,10 @@ const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
 const { buildPayload, LAYOUT_VERSION } = require('./renderer');
 const { createLineupResolver } = require('./lineup');
+const repairMatches = require('./repair-matches.json');
+const IMAGE_REPAIR_VERSION = 2;
 const previewRequest = require('./preview-request.json');
-const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const { buildAnalysis, ANALYSIS_VERSION } = require('./analysis');
 
 // Discord history is also checked, covering a restart after send() but before the local save.
@@ -24,7 +26,9 @@ async function recoverPosted(channel, botId, now) {
         const match = /^Friendly Match · (.+)$/.exec(embed.footer?.text || '');
         if (match) {
           const layout = (message.embeds || []).map(e => /^Friendly Layout · (\d+)$/.exec(e.footer?.text || '')).find(Boolean);
-          posted[match[1]] = { messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad'), analysisVersion: Number(/^Analyse v(\d+)/.exec((message.embeds || []).find(e => e.title === '🔎 Matchanalyse · Loco Squad')?.footer?.text || '')?.[1] || 1) };
+          const files = [...(message.attachments?.values() || [])];
+          const imagesPresent = ['ergebnis', 'loco-squad', 'gegner'].every(prefix => files.some(f => f.name === `${prefix}.png` || f.name?.startsWith(`${prefix}-`)) && (message.embeds || []).some(e => e.image?.url?.includes(prefix)));
+          posted[match[1]] = { imagesPresent, messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad'), analysisVersion: Number(/^Analyse v(\d+)/.exec((message.embeds || []).find(e => e.title === '🔎 Matchanalyse · Loco Squad')?.footer?.text || '')?.[1] || 1) };
         }
       }
     }
@@ -50,40 +54,14 @@ function restoreAttachmentReferences(message, embeds) {
       try { filename = decodeURIComponent(new URL(url).pathname.split('/').pop()); } catch { continue; }
       const attachment = exact || byName.get(filename);
       if (!attachment) continue;
-      // Reconnect the embedded image to the uploaded file instead of displaying it as a separate gallery.
-      const reference = `attachment://${attachment.name}`;
+      // Keep retained uploads on their actual CDN URL; attachment:// is reserved for new multipart uploads.
+      const reference = attachment.url;
       if (key === 'image') embed.setImage(reference); else embed.setThumbnail(reference);
       byName.set(attachment.name, attachment);
     }
   }
   // Retain the existing uploads, choosing one ID per filename; no second upload is required.
   return [...byName.values()].map(a => ({ id: a.id, filename: a.name }));
-}
-function restoreImageUploads(message, embeds) {
-  const names = ['ergebnis.png', 'loco-squad.png', 'gegner.png'];
-  const attachments = [...(message.attachments?.values() || [])];
-  const files = names.map(name => attachments.find(a => a.name === name));
-  if (files.some(file => !file?.url)) return null;
-  // Re-upload the original bytes in the same edit. attachment:// references then
-  // point to actual multipart uploads, even if an earlier edit lost the image slots.
-  let header = embeds.find(e => /^Friendly Layout · /.test(e.data.footer?.text || ''));
-  if (!header) { header = new EmbedBuilder().setColor(0xff9338); embeds.unshift(header); }
-  header.setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` });
-  for (const [name, title, color] of [['loco-squad.png', 'Loco Squad', 0xe84a8a], ['gegner.png', 'Gegner', 0x68a8ff]]) {
-    let embed = embeds.find(e => e.data.image?.url?.includes(name));
-    if (!embed) {
-      // The standard table slots have a title but no fields or match marker.
-      const tableSlots = embeds.filter(e => e !== header && !e.data.fields?.length && !e.data.footer && e.data.title !== '🔎 Matchanalyse · Loco Squad');
-      embed = tableSlots.find(e => !e.data.image);
-    }
-    if (!embed) {
-      embed = new EmbedBuilder().setTitle(title).setColor(color);
-      const analysis = embeds.findIndex(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
-      if (analysis < 0) embeds.push(embed); else embeds.splice(analysis, 0, embed);
-    }
-    embed.setImage(`attachment://${name}`);
-  }
-  return { files: files.map((file, i) => new AttachmentBuilder(file.url, { name: names[i] })), attachments: [] };
 }
 function knownShortDuration(entry, match, message) {
   // Prefer exact EA seconds. Rounded legacy minutes below 50 also prove a short match.
@@ -95,15 +73,21 @@ function knownShortDuration(entry, match, message) {
   }
   return null;
 }
+function assertImagePayload(payload) {
+  const files=payload.files||[];
+  const refs=(payload.embeds||[]).map(e=>(e.toJSON?.()||e).image?.url).filter(Boolean);
+  if(files.length!==3 || files.some(f=>!Buffer.isBuffer(f.attachment)||f.attachment.subarray(0,8).toString('hex')!=='89504e470d0a1a0a'||!refs.includes(`attachment://${f.name}`))) throw Error('Ergebnis- und Bewertungsgrafiken unvollständig; Nachricht bleibt unverändert.');
+}
 async function backfillAnalysis(channel, botId, rawMatches, data, save, options = {}) {
   let updated = 0;
-  const available = new Map(rawMatches.map(parseMatch).filter(Boolean).map(m => [m.id, m]));
+  const available = new Map(Object.entries(data.matchCache || {}).map(([id, entry]) => [id, parseMatch(entry.raw)]).filter(([,m]) => m));
+  for (const raw of rawMatches) { const m = parseMatch(raw); if (m) available.set(m.id, m); }
   for (const [id, entry] of Object.entries(data.posted)) {
     if (entry.suppressed) continue;
     const match = available.get(id);
     if (match && options.enrichMatch) await options.enrichMatch(match);
     const short = knownShortDuration(entry, match);
-    if (entry.imageRepairVersion === 1 && entry.durationPolicyVersion === 1 && short === null && (entry.layoutVersion || 1) >= LAYOUT_VERSION && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
+    if (entry.imagesPresent !== false && entry.imageRepairVersion === IMAGE_REPAIR_VERSION && entry.durationPolicyVersion === 1 && short === null && (entry.layoutVersion || 1) >= LAYOUT_VERSION && entry.analysisPresent && ((entry.analysisVersion || 1) >= ANALYSIS_VERSION || !available.has(id))) continue;
     try {
       const message = await channel.messages.fetch(entry.messageId);
       if (message.author?.id !== botId || !message.embeds?.some(e => e.footer?.text === `Friendly Match · ${id}`)) throw new Error('Nachricht stimmt nicht mit Bot und Match-ID überein.');
@@ -119,11 +103,13 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
       }
       entry.durationPolicyVersion = 1;
       if (match?.durationSeconds > 0) entry.durationSeconds = match.durationSeconds;
-      if (match && (entry.imageRepairVersion !== 1 || (match.own.players.some(p => p.lineupPosition) && (entry.layoutVersion || 1) < LAYOUT_VERSION))) {
+      if (match && (entry.imagesPresent === false || entry.imageRepairVersion !== IMAGE_REPAIR_VERSION || (entry.layoutVersion || 1) < LAYOUT_VERSION || (entry.analysisVersion || 1) < ANALYSIS_VERSION)) {
         const payload = await (options.buildPayload || buildPayload)(match);
+        assertImagePayload(payload);
         await message.edit({ ...payload, attachments: [] });
         entry.layoutVersion = LAYOUT_VERSION;
-        entry.imageRepairVersion = 1;
+        entry.imageRepairVersion = IMAGE_REPAIR_VERSION;
+        entry.imagesPresent = true;
         entry.analysisPresent = true;
         entry.analysisVersion = ANALYSIS_VERSION;
         save(data);
@@ -140,16 +126,16 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
         if (analysisIndex < 0) embeds.push(analysis); else embeds[analysisIndex] = analysis;
       }
       const attachments = restoreAttachmentReferences(message, embeds);
-      const imageUploads = restoreImageUploads(message, embeds);
+
       if (embeds.length > 10 || embedLength(embeds.map(e => e.toJSON())) > 6000) throw new Error('Discord-Embed-Limit würde überschritten.');
       for (const e of embeds) if (/^Friendly Layout · \d+$/.test(e.data.footer?.text || '')) e.setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` });
-      if (JSON.stringify(before) !== JSON.stringify(embeds.map(e => e.toJSON())) || (imageUploads && entry.imageRepairVersion !== 1)) {
-        await message.edit({ embeds, ...(imageUploads || (message.attachments ? { attachments } : {})), allowedMentions: { parse: [] } });
+      if (JSON.stringify(before) !== JSON.stringify(embeds.map(e => e.toJSON()))) {
+        await message.edit({ embeds, ...(message.attachments ? { attachments } : {}), allowedMentions: { parse: [] } });
         updated++;
         console.log(`[friendly-matches] Bestehender Post ${id}: Bildverweise repariert und verfügbare Matchanalyse ergänzt.`);
       }
       entry.layoutVersion = LAYOUT_VERSION;
-      if (imageUploads) entry.imageRepairVersion = 1;
+
       entry.analysisPresent = embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
       entry.analysisVersion = Number(/^Analyse v(\d+)/.exec(embeds.find(e => e.data.title === '🔎 Matchanalyse · Loco Squad')?.data.footer?.text || '')?.[1] || 1);
       save(data);
@@ -163,6 +149,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
 function createService(client, options = {}) {
   const deps = {
     enrichMatch: createLineupResolver(client),
+    repairMatches,
     load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest, onMatches: () => {},
     getChannel: () => client.channels.fetch(CHANNEL_ID),
     recover: (channel, now) => recoverPosted(channel, client.user.id, now),
@@ -184,6 +171,8 @@ function createService(client, options = {}) {
       running = true;
       try {
         const data = deps.load();
+        data.matchCache ||= {};
+        for (const raw of deps.repairMatches || []) { const m = parseMatch(raw); if (m && !data.matchCache[m.id] && now.getTime() - Date.parse(m.timestamp) < 30*86400000) data.matchCache[m.id] = { raw }; }
         const previewKey = deps.previewRequest?.key;
         if (latestPreview && previewKey && data.previewRequests?.[previewKey]) {
           previewDone = true;
@@ -195,6 +184,9 @@ function createService(client, options = {}) {
         for (const [id, entry] of Object.entries(recovered)) data.posted[id] = { ...data.posted[id], ...entry };
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
+        for (const row of raw) { const m = parseMatch(row); if (m) data.matchCache[m.id] = { raw: row }; }
+        for (const [id, entry] of Object.entries(data.matchCache)) if (now.getTime() - Date.parse(parseMatch(entry.raw)?.timestamp) > 30*86400000) delete data.matchCache[id];
+        deps.save(data);
         await deps.onMatches(raw, now);
         if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         const matches = candidates(raw, now, data.posted);
@@ -236,7 +228,7 @@ function createService(client, options = {}) {
         for (const match of matches) {
           await deps.enrichMatch(match);
           const message = await channel.send(await deps.buildPayload(match));
-          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, durationSeconds: match.durationSeconds, durationPolicyVersion: 1, imageRepairVersion: 1, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
+          data.posted[match.id] = { messageId: message.id, postedAt: now.toISOString(), matchAt: match.timestamp, durationSeconds: match.durationSeconds, durationPolicyVersion: 1, imageRepairVersion: IMAGE_REPAIR_VERSION, imagesPresent: true, layoutVersion: LAYOUT_VERSION, analysisPresent: true, analysisVersion: ANALYSIS_VERSION };
           deps.save(data);
           console.log(`[friendly-matches] ${match.id}: ${match.own.name} ${match.own.goals}:${match.opponent.goals} ${match.opponent.name} gepostet.`);
         }
@@ -250,4 +242,4 @@ function createService(client, options = {}) {
     },
   };
 }
-module.exports = { createService, recoverPosted, backfillAnalysis, restoreAttachmentReferences, restoreImageUploads };
+module.exports = { assertImagePayload, IMAGE_REPAIR_VERSION, createService, recoverPosted, backfillAnalysis, restoreAttachmentReferences };

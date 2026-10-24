@@ -49,7 +49,7 @@ test('every EA player receives details even without event data and without a lin
  const m=parseMatch(structuredClone(fixture));assert.ok(m.own.players.every(p=>!p.events&&!p.lineupPosition));
  const result=buildAnalysis(m).toJSON();
  assert.equal(result.fields.filter(f=>/ · /.test(f.name)).length,m.own.players.length);
- assert.ok(result.fields.some(f=>/Ereignisdaten/.test(f.name)&&/fehlen/.test(f.value)));
+ assert.ok(result.fields.some(f=>/Datengrundlage/.test(f.name)&&/nicht vollständig/.test(f.value)));
  assert.ok(result.fields.filter(f=>/ · /.test(f.name)).every(f=>/Pässe/.test(f.value)&&/Tacklings/.test(f.value)));
 });
 test('00:15 Cup uses the previous evening until 04:00, with no loss of substitute stats',()=>{
