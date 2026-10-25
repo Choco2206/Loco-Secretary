@@ -8,7 +8,7 @@ function match() { return parseMatch(structuredClone(fixture)); }
 
 test('analysis uses actual midfield totals and specific results from the reference match', () => {
   const m = match(); const e = buildAnalysis(m).toJSON();
-  assert.ok(e.fields.length > 5);
+  assert.ok(e.fields.length === 5);
   assert.match(e.fields[0].value, /84\/107/); assert.match(e.fields[0].value, /23 Fehlpässe/);
   assert.match(e.fields[1].value, /0 Tore aus 7 Schüssen/);
   assert.match(e.fields[2].value, /8\/40 erfolgreich/);
@@ -80,7 +80,7 @@ test('missing keeper saves never turn into a claim that no saves were made', () 
 test('analysis respects a reduced message budget while retaining all five categories', () => {
   const e = buildAnalysis(match(), 1600).toJSON();
   const count = (e.title?.length || 0) + (e.footer?.text?.length || 0) + e.fields.reduce((n, f) => n + f.name.length + f.value.length, 0);
-  assert.ok(count <= 1600); assert.ok(e.fields.length > 5);
+  assert.ok(count <= 1600); assert.ok(e.fields.length === 5);
 });
 
 test('opponent figures change the assessment without printing opponent stat blocks or names', () => {
@@ -93,4 +93,14 @@ test('opponent figures change the assessment without printing opponent stat bloc
   for (const text of [before, after, finishing(m), goalkeeper(m), require('../friendly-matches/analysis').defense(m)]) {
     assert.doesNotMatch(text, /Gegner-Mittelfeld:|Gegner-Tacklings:|Gegner: \d|Flayz_FRAQ/);
   }
+});
+
+ test('DNF reports player goal totals separately without silently changing the EA score',()=>{
+ const m=match();m.termination='dnf';m.own.goals=3;m.opponent.goals=0;
+ m.own.players.forEach(p=>p.goals=0);m.opponent.players.forEach(p=>p.goals=0);
+ const {recordedGoalsText}=require('../friendly-matches/renderer');
+ assert.match(recordedGoalsText(m),/Spielertore: 0:0.*EA-Wertung: 3:0/);
+ assert.equal(m.own.goals,3);
+ m.own.players[0].goals=null;assert.equal(recordedGoalsText(m),'');
+ m.termination=null;assert.equal(recordedGoalsText(m),'');
 });

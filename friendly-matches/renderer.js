@@ -7,7 +7,7 @@ const { buildAnalysis } = require('./analysis');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Friendly');
 const CREST_BASE = 'https://eafc24.content.easports.com/fifa/fltOnlineAssets/24B23FDE-7835-41C2-87A2-F453DFDB2E82/2024/fcweb/crests/256x256';
 const logoCache = new Map();
-const LAYOUT_VERSION = 9;
+const LAYOUT_VERSION = 10;
 const { positionLabel } = require('./lineup');
 const COLORS = { goalkeeper: ['#502918', '#ff9338'], defender: ['#49330f', '#ffd139'], midfielder: ['#123d2a', '#42e789'], forward: ['#1c315d', '#68a8ff'] };
 function display(n, digits = 0) { return n === null || n === undefined ? '–' : Number(n).toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
@@ -50,7 +50,7 @@ function drawLogo(ctx, image, team, x, y) {
   }
 }
 async function renderScore(match, logos) {
-  const { canvas, ctx } = panel(1000, match.termination ? 365 : 320);
+  const { canvas, ctx } = panel(1000, match.termination ? 925 : 880);
   const images = logos || await Promise.all([fetchLogo(match.own), fetchLogo(match.opponent)]);
   text(ctx, 'FRIENDLY MATCH', 500, 52, 16, '#9ca7b5', 400, 'center');
   drawLogo(ctx, images[0], match.own, 230, 145);
@@ -62,7 +62,28 @@ async function renderScore(match, logos) {
   const date = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(match.timestamp));
   text(ctx, `${date}${match.minutes === null ? '' : ` · Spieldauer ${match.minutes}′`}`, 500, 281, 15, '#9ca7b5', 800, 'center');
   if (match.termination) text(ctx, terminationText(match, false), 500, 324, 18, '#ffd139', 900, 'center');
+  drawComparison(ctx, match, match.termination ? 375 : 330);
   return canvas.toBuffer('image/png');
+}
+function drawComparison(ctx, match, top) {
+  text(ctx, 'TEAMVERGLEICH', 60, top, 24);
+  text(ctx, match.own.name, 60, top + 34, 16, '#d7ff56', 400);
+  text(ctx, match.opponent.name, 940, top + 34, 16, '#ff9338', 400, 'right');
+  const rows = [['Schüsse', 'shots'], ['Passquote', 'passPercent', 0, ' %'], ['Pässe angekommen', 'passes'], ['Tackle-Quote', 'tacklePercent', 0, ' %'], ['Ø Rating', 'averageRating', 2], ['Paraden', 'saves']];
+  rows.forEach(([label, key, digits = 0, suffix = ''], i) => {
+    const y = top + 86 + i * 65;
+    const a = match.own[key]; const b = match.opponent[key];
+    const valid = n => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    text(ctx, valid(a) ? display(a, digits) + suffix : '–', 60, y, 21, '#d7ff56', 160);
+    text(ctx, label, 500, y, 18, '#9ca7b5', 480, 'center');
+    text(ctx, valid(b) ? display(b, digits) + suffix : '–', 940, y, 21, '#ff9338', 160, 'right');
+    ctx.fillStyle = '#252c35'; ctx.fillRect(60, y + 19, 880, 8);
+    if (!valid(a) || !valid(b) || a + b === 0) return;
+    const scale = 436 / Math.max(a, b);
+    ctx.fillStyle = '#d7ff56'; ctx.fillRect(498 - a * scale, y + 19, a * scale, 8);
+    ctx.fillStyle = '#ff9338'; ctx.fillRect(502, y + 19, b * scale, 8);
+  });
+  text(ctx, 'Summen der erfassten Spieler · KI-Werte können fehlen', 500, top + 503, 14, '#9ca7b5', 880, 'center');
 }
 function renderTable(team, logo = null) {
   const { canvas, ctx } = panel(1200, 146 + Math.max(1, team.players.length) * 42);
@@ -102,6 +123,13 @@ function scorers(team) {
   const lines = team.players.filter(p => p.goals > 0 || p.assists > 0).map(p => `${escape(p.name)}${p.goals > 0 ? ` · ⚽ ${p.goals}` : ''}${p.assists > 0 ? ` · 👟 ${p.assists}` : ''}`);
   return (lines.join('\n') || 'Keine Tore oder Vorlagen').slice(0, 1024);
 }
+function recordedGoalsText(match) {
+  if (!match.termination) return '';
+  const sum = team => team.players.length && team.players.every(p => p.goals !== null && p.goals !== undefined) ? team.players.reduce((n, p) => n + p.goals, 0) : null;
+  const a = sum(match.own); const b = sum(match.opponent);
+  if (a === null || b === null) return '';
+  return `Erfasste Spielertore: ${a}:${b} · EA-Wertung: ${match.own.goals}:${match.opponent.goals}. Spielertore können Eigentore und KI-Tore auslassen; daraus wird kein bestätigter Spielstand abgeleitet.`;
+}
 function terminationText(match, emoji = true) {
   if (!match.termination) return '';
   const label = match.termination === 'dnf' ? 'Abbruch von EA gemeldet' : 'Vorzeitig beendet';
@@ -121,14 +149,15 @@ async function buildPayload(match, logos) {
     .setDescription([
       `Freundschaftsspiel${match.minutes === null ? ' · Spieldauer nicht verfügbar' : ` · Spieldauer ca. ${match.minutes}′`}`,
       terminationText(match),
-      'Werte links: Loco Squad · rechts: Gegner',
+      'Teamvergleich mit Balken in der Ergebnisgrafik.',
+      recordedGoalsText(match),
     ].filter(Boolean).join('\n'))
     .setTimestamp(new Date(match.timestamp)).setFooter({ text: marker(match.id) })
     .addFields(
       { name: `⚽ ${a.name}`.slice(0, 256), value: scorers(a), inline: true },
       { name: `⚽ ${b.name}`.slice(0, 256), value: scorers(b), inline: true },
       { name: 'Man of the Match', value: motm.slice(0, 1024) },
-      ...[['Schüsse', 'shots'], ['Passquote', 'passPercent', 0, ' %'], ['Ø Rating', 'averageRating', 1], ['Tackle-Quote', 'tacklePercent', 0, ' %'], ['Pässe angekommen', 'passes'], ['Paraden', 'saves']].map(([name, key, digits, suffix]) => ({ name, value: pair(key, digits, suffix), inline: true })));
+    );
   const prior = [new EmbedBuilder().setColor(summary.data.color).setImage('attachment://ergebnis.png').setFooter({ text: `Friendly Layout · ${LAYOUT_VERSION}` }), summary,
     new EmbedBuilder().setColor(0xe84a8a).setTitle(a.name.slice(0, 256)).setImage('attachment://loco-squad.png'),
     new EmbedBuilder().setColor(0x68a8ff).setTitle(b.name.slice(0, 256)).setImage('attachment://gegner.png')];
@@ -141,4 +170,4 @@ async function buildPayload(match, logos) {
     allowedMentions: { parse: [] },
   };
 }
-module.exports = { renderScore, renderTable, buildPayload, marker, LAYOUT_VERSION, terminationText };
+module.exports = { renderScore, renderTable, buildPayload, marker, LAYOUT_VERSION, terminationText, recordedGoalsText };

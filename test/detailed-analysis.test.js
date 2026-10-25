@@ -32,25 +32,25 @@ test('snapshot is read only from a dated final publication and validates unique 
  const message = {id:'x',author:{bot:true},embeds:[{footer:{text:'Loco Lineup · v1 · nightcup'},timestamp:'2026-10-23T18:00:00Z',description:'Datum: 23.10.2026\nStart: 23:00',fields:[{name:'RM',value:'<@123>'}]}]};
  assert.equal(parseSnapshot(message).positions['123'],'RM'); message.author.bot=false; assert.equal(parseSnapshot(message),null);
 });
-test('11 detailed player rows fit Discord limits and retain missing-data and event provenance', async () => {
+test('team narrative fits Discord limits without player rows or unsupported events', async () => {
  const m=parseMatch(structuredClone(fixture));
  for (const p of m.own.players) p.events=decodeEvents(rawEvents);
  const payload = await buildPayload(m,[null,null]); const embeds=payload.embeds.map(e=>e.toJSON());
  const n=embeds.reduce((n,e)=>n+(e.title?.length||0)+(e.description?.length||0)+(e.footer?.text?.length||0)+(e.fields||[]).reduce((n,f)=>n+f.name.length+f.value.length,0),0);
  assert.ok(n<=6000); assert.ok(embeds.every(e=>(e.fields||[]).every(f=>f.value.length<=1024)));
- const analysis=embeds.at(-1); assert.ok(analysis.fields.some(f=>/Balleroberung/.test(f.name)));
- assert.equal(analysis.fields.filter(f=>/ · /.test(f.name)).length,m.own.players.length);
+ const analysis=embeds.at(-1); assert.equal(analysis.fields.length,5); assert.doesNotMatch(JSON.stringify(analysis),/Passrichtungen|Richtungsaufteilung|Ballgewinne|→|↔/);
+ assert.equal(analysis.fields.filter(f=>/ · /.test(f.name)).length,0);
  const partial=structuredClone(m); partial.own.players[0].events=null;
  assert.ok(!JSON.stringify(buildAnalysis(partial).toJSON()).includes('empfangene Pässe:'));
  m.termination='early'; assert.ok(buildAnalysis(m).toJSON().fields.every(f=>/Keine reguläre/.test(f.value)));
 });
 
-test('every EA player receives details even without event data and without a lineup link',()=>{
- const m=parseMatch(structuredClone(fixture));assert.ok(m.own.players.every(p=>!p.events&&!p.lineupPosition));
+test('players remain in rating graphics while analysis contains five team sections',async()=>{
+ const m=parseMatch(structuredClone(fixture));
  const result=buildAnalysis(m).toJSON();
- assert.equal(result.fields.filter(f=>/ · /.test(f.name)).length,m.own.players.length);
- assert.ok(result.fields.some(f=>/Datengrundlage/.test(f.name)&&/nicht vollständig/.test(f.value)));
- assert.ok(result.fields.filter(f=>/ · /.test(f.name)).every(f=>/Pässe/.test(f.value)&&/Tacklings/.test(f.value)));
+ assert.equal(result.fields.length,5);
+ assert.ok(!result.fields.some(f=>/Datengrundlage| · /.test(f.name)));
+ const payload=await buildPayload(m,[null,null]);assert.equal(payload.files.length,3);
 });
 test('00:15 Cup uses the previous evening until 04:00, with no loss of substitute stats',()=>{
  const {eveningKey}=require('../friendly-matches/lineup');

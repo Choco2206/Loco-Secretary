@@ -85,3 +85,11 @@ Alle drei zuletzt am 24.10. abgerufenen echten Friendlies (IDs 132212995990358, 
 Das Bildlayout v9 verwendet match- und versionsspezifische Dateinamen. Bei einer Reparatur werden drei vollständige PNG-Buffer zusammen mit genau passenden Bildverweisen atomar hochgeladen. Unvollständige Payloads werden vor der Bearbeitung abgewiesen. Bereits vorhandene Uploads behalten bei sonstigen Bearbeitungen ihre IDs und direkten CDN-Verweise; ablaufende CDN-URLs werden nicht als neue Dateien erneut hochgeladen. Die Verlaufsprüfung erkennt fehlende Bildanhänge oder Bildslots und fordert eine Reparatur an.
 
 EA-Rohantworten werden für 30 Tage in `friendlyMatches.json` unter `matchCache` gespeichert. Damit können Grafiken und Analysen auch nach Ablauf des kurzen EA-Verlaufs erneut aufgebaut werden. Der einmalige Vorschauauftrag v6 startet auch außerhalb des Abendfensters; die drei bekannten Posts werden anhand ihrer Match-IDs repariert und nicht doppelt gepostet.
+
+
+### Darstellung ab Layout 10 / Analyse 7
+Ergebnis und Logos stehen über einem grafischen Teamvergleich für Schüsse, Passquote, angekommene Pässe, Tacklingquote, Durchschnittsnote und Paraden. Grün zeigt Loco, Orange den Gegner. Fehlende Werte werden als Strich dargestellt; bei 0:0 bleiben beide Balken leer. Es bleiben drei Bilddateien, damit die bestehende Reparatur der Ergebnis- und Bewertungsgrafiken funktioniert. Torschützen, Vorlagen und MotM stehen im Text unter der Grafik.
+
+Die Analyse enthält fünf Teamabschnitte (Aufbau, Chancenverwertung, Defensive, Torwart, Schwerpunkte), keine erneute Spielerliste und keine Aufschlüsselung nach Passrichtungen. Die Gegnerwerte dienen als Vergleich. Einzelne auffällige Beiträge können im Text genannt werden.
+
+Bei Abbruch bleiben EA-Wertung und Summe der erfassten Spielertore getrennt. Spielertore sind kein Beweis für den tatsächlichen Spielstand: Eigentore und KI-Tore können fehlen. Keine automatische Umwertung auf Unentschieden allein wegen eines Abbruchs zwischen Minute 90 und 95. Dauer bleibt aus der maximalen von EA gelieferten Spieler-Einsatzzeit abgeleitet; Abbruchwertung wird über winnerByDnf erkannt. Die bestehende 50-Minuten-Grenze bleibt bestehen.

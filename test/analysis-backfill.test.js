@@ -60,5 +60,5 @@ test('known games under 50 minutes are removed and failed deletion remains retry
 });
 test('all three actual recent Friendlies render with all graphics and available stats despite empty event counters',async()=>{
  const games=require('../friendly-matches/repair-matches.json');assert.equal(games.length,3);
- for(const raw of games){const m=parseMatch(raw);assert.ok(m);assert.ok(m.own.players.every(p=>p.events===null));const p=await buildPayload(m,[null,null]);assertImagePayload(p);assert.equal(p.embeds.at(-1).data.fields.filter(f=>/ · /.test(f.name)).length,m.own.players.length);assert.ok(!p.embeds.at(-1).data.description.includes('→'));}
+ for(const raw of games){const m=parseMatch(raw);assert.ok(m);assert.ok(m.own.players.every(p=>p.events===null));const p=await buildPayload(m,[null,null]);assertImagePayload(p);assert.equal(p.embeds.at(-1).data.fields.length,5);assert.ok(!p.embeds.at(-1).data.description.includes('→'));}
 });

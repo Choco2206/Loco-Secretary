@@ -1,7 +1,6 @@
 'use strict';
 const { EmbedBuilder } = require('discord.js');
-const ANALYSIS_VERSION = 6;
-const { positionLabel } = require('./lineup');
+const ANALYSIS_VERSION = 7;
 function valid(n) { return typeof n === 'number' && Number.isFinite(n) && n >= 0; }
 function total(players, key) { return players.length && players.every(p => valid(p[key])) ? players.reduce((sum, p) => sum + p[key], 0) : null; }
 function fmt(n, digits = 0) { return valid(n) ? n.toLocaleString('de-DE', { maximumFractionDigits: digits }) : '–'; }
@@ -46,7 +45,7 @@ function midfield(match) {
     }
     lines.push(...passHighlights(own.rows));
   }
-  return lines.join('\n');
+  return lines.join(' ');
 }
 function finishing(match) {
   const own = match.own; const opp = match.opponent;
@@ -70,7 +69,7 @@ function finishing(match) {
     const creator = own.players.filter(p => valid(p.assists) && p.assists >= 2).sort((a, b) => b.assists - a.assists)[0];
     if (creator && (!waste || creator.id !== waste.id)) lines.push(`**${name(creator)}:** ${creator.assists} Vorlagen als positiver Beitrag zur Torentstehung.`);
   }
-  return lines.join('\n');
+  return lines.join(' ');
 }
 function defense(match) {
   const own = tackles(match.own); const opp = tackles(match.opponent);
@@ -85,7 +84,7 @@ function defense(match) {
   const strong = candidates.filter(p => rate(p.tackles, p.tackleAttempts) >= 70).sort((a, b) => b.tackles - a.tackles)[0];
   if (low) lines.push(`**${name(low)}:** ${low.tackles}/${low.tackleAttempts} Tacklings erfolgreich. Die erfolglosen Versuche auf Timing und Unterstützung prüfen.`);
   if (strong) lines.push(`**${name(strong)}:** ${strong.tackles}/${strong.tackleAttempts} Tacklings erfolgreich, ein positiver Beitrag zu den Balleroberungen.`);
-  return lines.join('\n');
+  return lines.join(' ');
 }
 function goalkeeper(match) {
   const own = keeperContext(match.own); const opp = keeperContext(match.opponent);
@@ -103,7 +102,7 @@ function goalkeeper(match) {
     else lines.push('Keine Parade bei Gegentoren: die Gegentorszenen prüfen, ohne daraus automatisch einen Torwartfehler abzuleiten.');
   }
   if (valid(own.saves) && valid(opp.saves) && own.saves !== opp.saves) lines.push(own.saves > opp.saves ? 'Euer Keeper verzeichnete im Spielkontext mehr Abwehraktionen. Das spricht für mehr erfasste Eingriffe, beweist aber keine bessere Torwartleistung.' : 'Euer Keeper verzeichnete im Spielkontext weniger Abwehraktionen. Daraus lässt sich keine schwächere Torwartleistung ableiten.');
-  return lines.join('\n');
+  return lines.join(' ');
 }
 function coachingFocus(match) {
   const notes = []; const mid = passing(match.own, 'midfielder'); const opposingMid = passing(match.opponent, 'midfielder');
@@ -112,8 +111,6 @@ function coachingFocus(match) {
   const own = tackles(match.own); const opp = tackles(match.opponent);
   if (notes.length < 2 && own.attempts >= 10 && own.quote !== null && own.quote < 40 && (opp.quote === null || own.quote < opp.quote)) notes.push('**Defensivarbeit:** erfolglose Tacklings mit der Absicherung durch Mitspieler zusammen anschauen.');
   if (notes.length < 2 && valid(match.opponent.shots) && valid(match.own.shots) && match.opponent.shots > match.own.shots) notes.push('**Gegenabschlüsse:** die Situationen vor gegnerischen Schüssen als Team analysieren.');
-  const losses = match.own.players.filter(p => p.events?.lostDef >= 3).sort((a,b) => b.events.lostDef - a.events.lostDef)[0];
-  if (losses) notes.unshift(`**Ballverluste:** Bei ${name(losses)} sind ${losses.events.lostDef} Verluste im eigenen Drittel erfasst. Diese Szenen auf Anspielbarkeit und Passentscheidungen prüfen; die Zähler belegen keine direkte Gegentorursache.`);
   return notes.slice(0, 2).join('\n') || 'Aus diesen Zahlen ergibt sich kein eindeutiger einzelner Schwachpunkt. Die gegentor- und abschlussrelevanten Szenen gemeinsam anschauen.';
 }
 function fitAnalysis(embed, budget = 6000) {
@@ -126,42 +123,6 @@ function fitAnalysis(embed, budget = 6000) {
   }));
   return embed;
 }
-function playerAssessment(p) {
-  const q=rate(p.passes,p.passAttempts);
-  if(p.position==='goalkeeper') return valid(p.saves) && p.saves>0 ? `${p.saves} erfasste Paraden. Gegentore allein belegen keinen Torwartfehler.` : 'Torwartaktionen nur im Zusammenhang mit den zugelassenen Abschlüssen bewerten.';
-  if(p.position==='forward' && p.shots>=3 && p.goals===0) return `${p.shots} Abschlüsse ohne Tor: diese Abschlussszenen nachbesprechen.`;
-  if(q!==null && p.passAttempts>=10 && q<75) return `${p.passAttempts-p.passes} Zuspiele kamen nicht an. Anspielstationen und Passentscheidungen prüfen.`;
-  if(p.position==='defender' && p.tackleAttempts>=5 && rate(p.tackles,p.tackleAttempts)<50) return 'Viele Tacklingversuche blieben erfolglos. Timing und Absicherung gemeinsam prüfen.';
-  if(q!==null && p.passAttempts>=10 && q>=90) return 'Hohe Passsicherheit; die Gefährlichkeit der Zuspiele lässt sich daraus allein nicht ableiten.';
-  return p.passAttempts<10 ? 'Wenige Passaktionen: keine belastbare Aussage zur Einbindung allein aus dieser Stichprobe.' : 'Passquote und Zweikämpfe zusammen mit den jeweiligen Spielszenen betrachten.';
-}
-function playerDetails(p) {
-  const lines = [`EA-Note ${fmt(p.rating, 1)} · Tore ${fmt(p.goals)} · Vorlagen ${fmt(p.assists)}`];
-  const q = rate(p.passes, p.passAttempts);
-  lines.push(`Pässe ${fmt(p.passes)}/${fmt(p.passAttempts)} · ${fmt(q, 1)} %`);
-  const e = p.events;
-  if (!e) {
-    lines.push(`Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · ${p.position === 'goalkeeper' ? `Paraden ${fmt(p.saves)}` : `Schüsse ${fmt(p.shots)}`}`);
-    lines.push(playerAssessment(p));
-    return lines.filter(Boolean).join('\n');
-  }
-  if (e.passingComplete) {
-    lines.push(`Angekommen → ${e.forward} · ← ${e.backward} · ↔ ${e.sideways}`);
-    lines.push(`Kurz/mittel/lang ${e.short}/${e.medium}/${e.long} · Flanken ${e.crosses}`);
-  } else lines.push('Passereignisse unvollständig; keine Richtungsaufteilung.');
-  if (p.position === 'goalkeeper') lines.push(`Paraden ${fmt(p.saves)} · abgefangen ${e.interceptions}`);
-  else if (p.position === 'forward') lines.push(`Schüsse ${fmt(p.shots)} · Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · Luftduelle gewonnen ${e.aerialAttack + e.aerialDefense}`);
-  else lines.push(`Tacklings ${fmt(p.tackles)}/${fmt(p.tackleAttempts)} · abgefangen ${e.interceptions} · Luftduelle gewonnen ${e.aerialAttack + e.aerialDefense}`);
-  if (['midfielder', 'forward'].includes(p.position)) lines.push(`Dribblings ${e.dribbles} · Schnittstellenpässe ${e.passingComplete ? e.through : '–'} · zweite Vorlagen ${e.secondAssists}`);
-  lines.push(`Ballgewinne E/M/O ${e.wonDef}/${e.wonMid}/${e.wonAttack} · Verluste ${e.lostDef}/${e.lostMid}/${e.lostAttack}`);
-  return lines.join('\n');
-}
-function eventSummary(match) {
-  const rows = match.own.players.filter(p => p.events);
-  if (!rows.length) return null;
-  const n = key => rows.reduce((sum, p) => sum + p.events[key], 0);
-  return `Ereignisse für ${rows.length}/${match.own.players.length} Spieler vorhanden.\nBallgewinne eigenes/mittleres/offensives Drittel: ${n('wonDef')}/${n('wonMid')}/${n('wonAttack')} · Ballverluste: ${n('lostDef')}/${n('lostMid')}/${n('lostAttack')}\nAbgefangene Bälle: ${n('interceptions')} · gewonnene Luftduelle offensiv/defensiv: ${n('aerialAttack')}/${n('aerialDefense')}\nEreigniszähler sind eine ergänzende, möglicherweise unvollständige Aufschlüsselung. Keine Laufwege oder empfangenen Pässe.`;
-}
 function buildAnalysis(match, budget = 6000) {
   const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle('🔎 Matchanalyse · Loco Squad');
   const labels = ['⚙️ Spielaufbau im Mittelfeld', '🎯 Chancenverwertung', '🛡️ Defensive Stabilität', '🧤 Torwartleistung'];
@@ -172,20 +133,10 @@ function buildAnalysis(match, budget = 6000) {
     [midfield, finishing, defense, goalkeeper].forEach((analyze, index) => embed.addFields({ name: labels[index], value: analyze(match).slice(0, 1024) }));
     embed.addFields({ name: '🎯 Schwerpunkte für die Nachbesprechung', value: coachingFocus(match) });
     if (match.own.players.length) {
-      const overview = eventSummary(match);
-      const missing = match.own.players.filter(p => !p.events).length;
-      if (missing) embed.addFields({ name: 'ℹ️ Datengrundlage', value: 'Die Analyse verwendet die gelieferten Spielwerte. Zusätzliche Ereigniszähler für Passrichtungen, Flanken und Luftduelle liefert EA in diesem Spiel nicht vollständig.' });
-      if (overview) embed.addFields({ name: '📊 Balleroberung und Ballverluste', value: overview });
-      embed.setDescription(overview ? '→/←/↔ = angekommene Vorwärts-/Rückwärts-/Seitwärtspässe. E/M/O = eigenes/mittleres/offensives Drittel.' : 'Auswertung der tatsächlich erfassten Spieler. Genaue Position laut finaler Aufstellung, sonst EA-Positionsgruppe.');
-      for (const player of match.own.players.slice(0, 18)) {
-        embed.addFields({ name: `${positionLabel(player)} · ${name({ ...player, lineupPosition: null })}`.slice(0, 256), value: playerDetails(player) });
-      }
+      embed.setDescription('Analyse der erfassten Spielwerte im Vergleich zum Gegner. Fokus: Loco Squad.');
     }
   }
   embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Fokus Loco Squad · Ursachen und Chancenqualität erfordern Spielszenen` });
-  if (embed.data.fields.length > 5) {
-    embed.data.fields.slice(0, 5).forEach(f => { if (f.value.length > 220) f.value = f.value.split('\n').slice(0, 2).join('\n').slice(0, 220); });
-  }
   return fitAnalysis(embed, budget);
 }
-module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus, playerDetails, eventSummary };
+module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus };
