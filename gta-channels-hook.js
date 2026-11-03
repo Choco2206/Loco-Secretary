@@ -13,8 +13,6 @@ const CHANNELS = [
   ['📸︱𝘾𝙡𝙞𝙥𝙨-𝙪𝙣𝙙-𝘽𝙞𝙡𝙙𝙚𝙧', ChannelType.GuildText, false, 'Eure Clips, Screenshots und Highlights.'],
   ['💡︱𝙏𝙞𝙥𝙥𝙨-𝙪𝙣𝙙-𝙂𝙪𝙞𝙙𝙚𝙨', ChannelType.GuildText, false, 'Hilfreiche Tipps, Anleitungen und Entdeckungen.'],
   ['🏆︱𝘾𝙧𝙚𝙬-𝙍𝙖𝙣𝙠𝙞𝙣𝙜', ChannelType.GuildText, true, 'Platz für Ergebnisse und Ranglisten unserer eigenen Crew-Events.'],
-  ['🔊︱𝙂𝙏𝘼-𝙇𝙤𝙪𝙣𝙜𝙚', ChannelType.GuildVoice, false],
-  ['🎮︱𝙂𝙏𝘼-𝙎𝙚𝙨𝙨𝙞𝙤𝙣', ChannelType.GuildVoice, false],
 ];
 
 async function ensureGtaChannels(client) {
@@ -50,7 +48,9 @@ async function ensureGtaChannels(client) {
     await category.setPosition(position, { reason: REASON });
   }
 
-  // Only the nine explicitly named GTA channels may be migrated.
+  // Voice channels are managed manually after initial setup. Never recreate them
+  // by name: members may rename them for PlayStation compatibility.
+  // Only the seven explicitly named GTA text channels may be migrated.
   // Preserve their permission overwrites and messages. Never delete channels.
   for (const [name, type, readOnly, topic] of CHANNELS) {
     const normalize = value => value.normalize('NFKC').toLowerCase();
