@@ -7,7 +7,7 @@ const CHANNEL_ID = '1567217317593616474';
 const TITLE = 'Wähle deine Bereiche';
 const PREFIX = 'loco_self_role:';
 const CHOICES = [
-  { key: 'tcup', label: 'T-Cup', emoji: '🏆', id: '1482531092488654978' },
+  { key: 'tcup', label: 'T-Cup', emoji: '🏆', id: '1433124858102812692' },
   { key: 'fun', label: 'Fun Gaming', emoji: '🎮', name: 'fungaming' },
   { key: 'gta', label: 'GTA 6', emoji: '🌴', id: '1567214152974475325' },
 ];
