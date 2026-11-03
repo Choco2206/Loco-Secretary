@@ -1,8 +1,9 @@
 const { Client, Events, ChannelType, PermissionFlagsBits: P } = require('discord.js');
 
-const CATEGORY_ID = '1494693879973417091';
+const FUN_CATEGORY_ID = '1494693879973417091';
+const GTA_CATEGORY_NAME = '🌴︱𝙂𝙏𝘼-𝟲';
 const ROLE_ID = '1567214152974475325';
-const REASON = 'GTA-6-Bereich unter Fun Gaming ergänzen, bestehende Kanäle unverändert lassen';
+const REASON = 'GTA-6-Kanäle in eigene Kategorie direkt unter Fun Gaming verschieben';
 const CHANNELS = [
   ['📢︱𝙂𝙏𝘼-𝙉𝙚𝙬𝙨', ChannelType.GuildText, true, 'Bestätigte GTA-6-News, Trailer und Informationen.'],
   ['💬︱𝙂𝙏𝘼-𝙏𝙖𝙡𝙠', ChannelType.GuildText, false, 'Austausch zu GTA 6. Story-Spoiler bitte verdeckt posten.'],
@@ -16,23 +17,50 @@ const CHANNELS = [
 ];
 
 async function ensureGtaChannels(client) {
-  const category = await client.channels.fetch(CATEGORY_ID);
-  if (!category || category.type !== ChannelType.GuildCategory) throw new Error('Fun-Gaming-Kategorie nicht gefunden');
-  const guild = category.guild;
+  const funCategory = await client.channels.fetch(FUN_CATEGORY_ID);
+  if (!funCategory || funCategory.type !== ChannelType.GuildCategory) throw new Error('Fun-Gaming-Kategorie nicht gefunden');
+  const guild = funCategory.guild;
   if (!await guild.roles.fetch(ROLE_ID)) throw new Error('GTA-6-Rolle nicht gefunden');
   await guild.channels.fetch();
   const me = guild.members.me || await guild.members.fetchMe();
-  if (!category.permissionsFor(me)?.has(P.ManageChannels)) throw new Error('Kanäle verwalten fehlt');
+  if (!me.permissions.has(P.ManageChannels)) throw new Error('Kanäle verwalten fehlt');
 
-  // Never edit, reparent, rename, reorder or change permissions on an existing channel.
-  // No position or setPositions calls: Discord appends new children within their type.
+  const normalizeName = value => value.normalize('NFKC').toLowerCase();
+  let category = guild.channels.cache.find(ch =>
+    ch.type === ChannelType.GuildCategory && normalizeName(ch.name) === normalizeName(GTA_CATEGORY_NAME));
+  if (!category) {
+    category = await guild.channels.create({
+      name: GTA_CATEGORY_NAME,
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        { id: guild.id, deny: [P.ViewChannel] },
+        { id: ROLE_ID, allow: [P.ViewChannel, P.ReadMessageHistory, P.Connect, P.Speak] },
+        { id: me.id, allow: [P.ViewChannel, P.ManageChannels, P.SendMessages, P.ReadMessageHistory, P.Connect, P.Speak] },
+      ],
+      reason: REASON,
+    });
+  }
+  // Move only our category, leaving the relative order of all other categories intact.
+  const categories = [...guild.channels.cache.values()]
+    .filter(ch => ch.type === ChannelType.GuildCategory)
+    .sort((a, b) => a.position - b.position || (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
+  if (categories[categories.findIndex(ch => ch.id === funCategory.id) + 1]?.id !== category.id) {
+    const position = category.position < funCategory.position ? funCategory.position : funCategory.position + 1;
+    await category.setPosition(position, { reason: REASON });
+  }
+
+  // Only the nine explicitly named GTA channels may be migrated.
+  // Preserve their permission overwrites and messages. Never delete channels.
   for (const [name, type, readOnly, topic] of CHANNELS) {
     const normalize = value => value.normalize('NFKC').toLowerCase();
     const existing = guild.channels.cache.find(ch =>
-      ch.parentId === CATEGORY_ID && normalize(ch.name) === normalize(name));
+      (ch.parentId === category.id || ch.parentId === FUN_CATEGORY_ID) && normalize(ch.name) === normalize(name));
     if (existing) {
       if (existing.type !== type) throw new Error('Kanalname mit anderem Typ belegt: ' + name);
-      console.log('[gta-setup] Bereits vorhanden, unverändert: ' + existing.id + ' ' + existing.name);
+      if (existing.parentId === FUN_CATEGORY_ID) {
+        await existing.setParent(category.id, { lockPermissions: false, reason: REASON });
+        console.log('[gta-setup] Verschoben: ' + existing.id + ' ' + existing.name);
+      }
       continue;
     }
     const allow = [P.ViewChannel, P.ReadMessageHistory, P.AddReactions, P.UseExternalEmojis];
@@ -44,7 +72,7 @@ async function ensureGtaChannels(client) {
     }
     if (type === ChannelType.GuildVoice) allow.push(P.Connect, P.Speak, P.Stream, P.UseVAD);
     const created = await guild.channels.create({
-      name, type, parent: CATEGORY_ID, ...(topic ? { topic } : {}),
+      name, type, parent: category.id, ...(topic ? { topic } : {}),
       permissionOverwrites: [
         { id: guild.id, deny: [P.ViewChannel] },
         { id: ROLE_ID, allow, deny },
@@ -54,7 +82,7 @@ async function ensureGtaChannels(client) {
     });
     console.log('[gta-setup] Erstellt: ' + created.id + ' ' + created.name);
   }
-  console.log('[gta-setup] Fertig. Keine bestehenden Kanäle bearbeitet oder umsortiert.');
+  console.log('[gta-setup] Fertig. Nur GTA-Kanäle migriert; übrige Kanäle und deren relative Reihenfolge unverändert.');
 }
 
 module.exports = function installGtaChannelsHook() {
