@@ -3,6 +3,7 @@ const { Client, Events, ChannelType, PermissionFlagsBits: P } = require('discord
 const FUN_CATEGORY_ID = '1494693879973417091';
 const GTA_CATEGORY_NAME = '🌴︱𝙂𝙏𝘼-𝟲';
 const ROLE_ID = '1567214152974475325';
+const GTA_POSTING_USER_ID = '1034375628465647626';
 const REASON = 'GTA-6-Kanäle in eigene Kategorie direkt unter Fun Gaming verschieben';
 const CHANNELS = [
   ['📢︱𝙂𝙏𝘼-𝙉𝙚𝙬𝙨', ChannelType.GuildText, true, 'Bestätigte GTA-6-News, Trailer und Informationen.'],
@@ -81,6 +82,28 @@ async function ensureGtaChannels(client) {
       reason: REASON,
     });
     console.log('[gta-setup] Erstellt: ' + created.id + ' ' + created.name);
+  }
+  // Member-specific allows also override the GTA role's read-only news/ranking rules.
+  // Edit only this member's overwrite; retain every other role/member permission.
+  const postingMember = await guild.members.fetch(GTA_POSTING_USER_ID);
+  const postingPermissions = {
+    ViewChannel: true, ReadMessageHistory: true, SendMessages: true,
+    SendMessagesInThreads: true, AttachFiles: true, EmbedLinks: true,
+    AddReactions: true, UseExternalEmojis: true, UseExternalStickers: true,
+    CreatePublicThreads: true, CreatePrivateThreads: true, SendPolls: true,
+    SendVoiceMessages: true, UseApplicationCommands: true,
+    Connect: true, Speak: true, Stream: true, UseVAD: true,
+  };
+  await category.permissionOverwrites.edit(postingMember, postingPermissions, {
+    reason: 'GTA-6-Veröffentlichungsrechte für freigegebenes Mitglied',
+  });
+  await guild.channels.fetch();
+  for (const channel of guild.channels.cache.values()) {
+    if (channel.parentId !== category.id) continue;
+    await channel.permissionOverwrites.edit(postingMember, postingPermissions, {
+      reason: 'GTA-6-Veröffentlichungsrechte für freigegebenes Mitglied',
+    });
+    console.log('[gta-setup] Veröffentlichungsrechte gesetzt: ' + channel.id);
   }
   console.log('[gta-setup] Fertig. Nur GTA-Kanäle migriert; übrige Kanäle und deren relative Reihenfolge unverändert.');
 }
