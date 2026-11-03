@@ -32,15 +32,37 @@ async function setup(client) {
   if (!channel || channel.type !== ChannelType.GuildText) throw new Error('Rollenauswahl-Textkanal nicht gefunden');
   await channel.guild.roles.fetch();
   const me = channel.guild.members.me || await channel.guild.members.fetchMe();
-  await channel.setName('🎭︱𝙍𝙤𝙡𝙡𝙚𝙣𝙖𝙪𝙨𝙬𝙖𝙝𝙡', 'Rollenauswahl im Loco-Schriftstil');
+  // Missing channel-management permissions must not prevent posting the panel.
+  async function optionalStep(label, action) {
+    try { await action(); }
+    catch (error) {
+      if (Number(error.code) !== 50013 && Number(error.code) !== 50001) throw error;
+      console.warn('[self-roles] ' + label + ': ' + error.message +
+        '. Bitte Loco Secretary im Auswahlkanal die nötigen Rechte geben.');
+    }
+  }
+  if (channel.name !== '🎭︱𝙍𝙤𝙡𝙡𝙚𝙣𝙖𝙪𝙨𝙬𝙖𝙝𝙡') {
+    await optionalStep('Kanal umbenennen (Kanäle verwalten fehlt)', () =>
+      channel.setName('🎭︱𝙍𝙤𝙡𝙡𝙚𝙣𝙖𝙪𝙨𝙬𝙖𝙝𝙡', 'Rollenauswahl im Loco-Schriftstil'));
+  }
   // Only this selection channel is changed. Parent and position stay untouched.
-  await channel.permissionOverwrites.edit(channel.guild.id, {
-    ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
-    SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false,
-  });
-  await channel.permissionOverwrites.edit(me.id, {
-    ViewChannel: true, ReadMessageHistory: true, SendMessages: true, EmbedLinks: true,
-  });
+  await optionalStep('Kanalrechte setzen (Rollen verwalten fehlt)', () =>
+    channel.permissionOverwrites.edit(channel.guild.id, {
+      ViewChannel: true, ReadMessageHistory: true, SendMessages: false,
+      SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false,
+    }));
+  await optionalStep('Bot-Kanalrechte setzen (Rollen verwalten fehlt)', () =>
+    channel.permissionOverwrites.edit(me.id, {
+      ViewChannel: true, ReadMessageHistory: true, SendMessages: true, EmbedLinks: true,
+    }));
+  const effective = channel.permissionsFor(me);
+  const required = [
+    ['Kanal ansehen', P.ViewChannel], ['Nachrichtenverlauf anzeigen', P.ReadMessageHistory],
+    ['Nachrichten senden', P.SendMessages], ['Links einbetten', P.EmbedLinks],
+  ];
+  const missing = required.filter(([, permission]) => !effective?.has(permission));
+  if (missing.length) throw new Error('Im Rollenauswahl-Kanal fehlen: ' + missing.map(([label]) => label).join(', '));
+  if (!me.permissions.has(P.ManageRoles)) console.warn('[self-roles] Rollen verwalten fehlt. Rollenbuttons bleiben deaktiviert.');
   const row = new ActionRowBuilder().addComponents(CHOICES.map(choice => {
     const role = findRole(channel.guild, choice);
     const available = canAssign(role, me);
@@ -51,13 +73,17 @@ async function setup(client) {
   const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle(TITLE)
     .setDescription('Schalte dir die Bereiche frei, die dich interessieren. Du kannst mehrere Rollen auswählen.\n\n🏆 **T-Cup**\n🎮 **Fun Gaming**\n🌴 **GTA 6**\n\n**Button drücken:** Rolle erhalten.\n**Erneut drücken:** Rolle entfernen.')
     .setFooter({ text: 'LOCO SQUAD • Deine Bereiche, deine Wahl' });
-  const messages = await channel.messages.fetch({ limit: 100 });
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(error => {
+    throw new Error('Rollenauswahl-Nachrichten lesen: ' + error.message);
+  });
   const existing = messages.find(message => message.author.id === client.user.id &&
     (message.embeds.some(item => item.title === TITLE) ||
      message.components.some(action => action.components.some(button => button.customId?.startsWith(PREFIX)))));
   const payload = { embeds: [embed], components: [row], allowedMentions: { parse: [] } };
-  if (existing) await existing.edit(payload);
-  else await channel.send(payload);
+  try {
+    if (existing) await existing.edit(payload);
+    else await channel.send(payload);
+  } catch (error) { throw new Error('Rollenauswahl-Panel senden: ' + error.message); }
   console.log('[self-roles] Rollenauswahl bereit: ' + channel.id);
 }
 
