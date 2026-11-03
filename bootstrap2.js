@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Module = require('module');
 
+require('./gta-channels-hook')();
 require('./roster-hook')();
 require('./power-ranking-hook')();
 require('./friendly-matches-hook')();
