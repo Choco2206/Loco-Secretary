@@ -62,7 +62,6 @@ const fc27Code = String.raw`
 
 /* -------------------- FC27 KADERABFRAGE -------------------- */
 const FC27_PUBLIC_CHANNEL = '1543623599338819704';
-const FC27_ADMIN_CHANNEL = '1543625146454114324';
 const FC27_FILE = path.join(__dirname, 'data', 'fc27Kaderplanung.json');
 const FC27_POSITIONS = ['TW', 'LIV', 'ZIV', 'RIV', 'ZDM', 'ZOM', 'LM/RM', 'ST'];
 
@@ -160,32 +159,8 @@ async function fc27EnsurePublic() {
   const payload = { embeds: [embed], components: [fc27PublicButtons()] };
   if (old) await old.edit(payload); else await ch.send(payload);
 }
-async function fc27EnsureAdmin() {
-  const ch = await fc27GetChannel(FC27_ADMIN_CHANNEL);
-  if (!ch?.isTextBased()) {
-    console.error('[fc27] Admin-Kanal nicht erreichbar:', FC27_ADMIN_CHANNEL);
-    return;
-  }
-  let data = fc27Load();
-  const members = await fc27Members(ch.guild);
-  data = fc27PruneToCurrentMembers(data, members);
-  const lines = members.map(m => {
-    const p = data.players[m.id];
-    return '<@' + m.id + '>  Spieler: ' + (p?.self?.length === 3 ? '✅' : '⬜') + ' | Choko: ' + (p?.manager?.length === 3 ? '✅' : '⬜') + (p?.excluded ? ' | ❌ Nicht eingeplant' : '');
-  });
-  const embed = new EmbedBuilder()
-    .setColor(CONFIG.branding.accentColor)
-    .setTitle('🔒 FC 27 – Kaderplanung intern')
-    .setDescription('Hier hinterlegst du deine Einschätzung unabhängig von der Spielerwahl.\n\n' + (lines.join('\n') || 'Keine Spieler gefunden.'))
-    .setFooter({ text: CONFIG.branding.footer });
-  const msgs = await ch.messages.fetch({ limit: 30 });
-  const old = [...msgs.values()].find(m => m.author.id === client.user.id && m.embeds?.[0]?.title === '🔒 FC 27 – Kaderplanung intern');
-  const payload = { embeds: [embed], components: [fc27AdminButtons()] };
-  if (old) await old.edit(payload); else await ch.send(payload);
-}
 async function fc27Refresh() {
   await fc27EnsurePublic();
-  await fc27EnsureAdmin();
 }
 function fc27ResultText(guild) {
   const data = fc27Load();
