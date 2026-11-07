@@ -182,14 +182,12 @@ function createService(client, options = {}) {
         if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${CHANNEL_ID} nicht erreichbar.`);
         const recovered = await deps.recover(channel, now);
         for (const [id, entry] of Object.entries(recovered)) data.posted[id] = { ...data.posted[id], ...entry };
-        if (client.user?.id) await backfillAnalysis(channel, client.user.id, [], data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
         for (const row of raw) { const m = parseMatch(row); if (m) data.matchCache[m.id] = { raw: row }; }
         for (const [id, entry] of Object.entries(data.matchCache)) if (now.getTime() - Date.parse(parseMatch(entry.raw)?.timestamp) > 30*86400000) delete data.matchCache[id];
         deps.save(data);
         await deps.onMatches(raw, now);
-        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
-        const matches = candidates(raw, now, data.posted);
+        const matches = candidates(Object.values(data.matchCache).map(entry => entry.raw), now, data.posted);
         const latest = deps.previewRequest?.latest ? raw.map(parseMatch).filter(Boolean)
           .filter(m => Date.parse(m.timestamp) <= now.getTime()).sort((a,b) => b.timestamp.localeCompare(a.timestamp))[0] : null;
         const resolvedRequest = deps.previewRequest?.latest
@@ -237,6 +235,7 @@ function createService(client, options = {}) {
           deps.save(data); previewDone = true;
           console.log(`[friendly-matches] Letzter-Friendly-Test abgeschlossen: ${resolvedRequest.matchId}.`);
         }
+        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
         return matches.length;
       } finally { running = false; }
     },
