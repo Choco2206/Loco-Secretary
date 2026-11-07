@@ -3,7 +3,6 @@ const { MIN_MATCH_SECONDS, isPublishableMatch, isActive, localParts, POLL_MS, ca
 const { getFriendlyMatches } = require('../power-ranking/ea-client');
 const store = require('./store');
 const { buildPayload, LAYOUT_VERSION } = require('./renderer');
-const { createLineupResolver } = require('./lineup');
 const repairMatches = require('./repair-matches.json');
 const IMAGE_REPAIR_VERSION = 2;
 const previewRequest = require('./preview-request.json');
@@ -148,7 +147,8 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
 
 function createService(client, options = {}) {
   const deps = {
-    enrichMatch: createLineupResolver(client),
+    // EA positions only; do not read Discord lineup channels.
+    enrichMatch: async match => match,
     repairMatches,
     load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest, onMatches: () => {},
     getChannel: () => client.channels.fetch(CHANNEL_ID),
