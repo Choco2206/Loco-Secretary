@@ -37,7 +37,7 @@ function percent(made, attempted) { return made === null || attempted === null |
 function sum(rows, key) {
   return rows.length && rows.every(p => p[key] !== null) ? rows.reduce((n, p) => n + p[key], 0) : null;
 }
-function parseTeam(id, club, rawPlayers) {
+function parseTeam(id, club, rawPlayers, fallbackName) {
   const players = Object.entries(rawPlayers || {}).map(([playerId, p]) => ({
     events: decodeEvents(p),
     id: playerId, name: String(p.playername ?? p.playerName ?? p.name ?? playerId),
@@ -54,7 +54,7 @@ function parseTeam(id, club, rawPlayers) {
   const ratings = players.map(p => p.rating).filter(n => n !== null);
   return {
     id: String(club.details?.clubId ?? club.clubId ?? id),
-    name: String(club.details?.name ?? club.name ?? club.clubName ?? (String(id) === CLUB_ID ? 'Loco Squad' : 'Gegner')),
+    name: String(club.details?.name ?? club.name ?? club.clubName ?? fallbackName),
     goals: number(club.goals ?? club.score),
     winnerByDnf: Number(club.winnerByDnf) > 0,
     crestIds: [...new Set([club.TEAM, club.details?.customKit?.crestAssetId, club.details?.teamId].filter(v => /^\d+$/.test(String(v))).map(String))],
@@ -64,16 +64,16 @@ function parseTeam(id, club, rawPlayers) {
     saves: sum(players, 'saves'), averageRating: ratings.length ? ratings.reduce((n, r) => n + r, 0) / ratings.length : null,
   };
 }
-function parseMatch(raw) {
+function parseMatch(raw, { clubId = CLUB_ID, clubName = 'Loco Squad' } = {}) {
   const id = String(raw?.matchId ?? raw?.match_id ?? raw?.id ?? '');
   const date = matchTime(raw);
   const entries = Object.entries(raw?.clubs || {});
-  const own = entries.find(([key, c]) => String(c.details?.clubId ?? c.clubId ?? key) === CLUB_ID);
+  const own = entries.find(([key, c]) => String(c.details?.clubId ?? c.clubId ?? key) === clubId);
   const opponent = entries.find(entry => entry !== own);
   if (!id || !date || !own || !opponent || entries.length !== 2) return null;
   // 5 is EA's friendlyMatch type. Never accept a known league/playoff match.
   if (entries.some(([, c]) => c.matchType !== undefined && !['5', 'friendlyMatch'].includes(String(c.matchType)))) return null;
-  const teams = [own, opponent].map(([key, c]) => parseTeam(key, c, raw.players?.[key]));
+  const teams = [own, opponent].map(([key, c], index) => parseTeam(key, c, raw.players?.[key], index === 0 ? clubName : 'Gegner'));
   if (teams.some(t => t.goals === null || !t.players.length)) return null;
   const seconds = teams.flatMap(t => t.players).map(p => p.secondsPlayed).filter(n => n !== null && n > 0);
   const durationSeconds = seconds.length ? Math.max(...seconds) : null;
@@ -84,10 +84,10 @@ function parseMatch(raw) {
 function isPublishableMatch(match) {
   return Boolean(match && Number.isFinite(match.durationSeconds) && match.durationSeconds >= MIN_MATCH_SECONDS);
 }
-function candidates(rawMatches, now, posted = {}) {
+function candidates(rawMatches, now, posted = {}, club) {
   const result = new Map();
   for (const raw of rawMatches) {
-    const match = parseMatch(raw);
+    const match = parseMatch(raw, club);
     if (!isPublishableMatch(match) || posted[match.id]) continue;
     const date = new Date(match.timestamp);
     if (date > now || !isActive(date) || sessionKey(date) !== sessionKey(now)) continue;

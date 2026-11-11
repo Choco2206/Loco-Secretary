@@ -124,7 +124,7 @@ function fitAnalysis(embed, budget = 6000) {
   return embed;
 }
 function buildAnalysis(match, budget = 6000) {
-  const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle('🔎 Matchanalyse · Loco Squad');
+  const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle(`🔎 Matchanalyse · ${match.own.name}`.slice(0, 256));
   const labels = ['⚙️ Spielaufbau im Mittelfeld', '🎯 Chancenverwertung', '🛡️ Defensive Stabilität', '🧤 Torwartleistung'];
   if (match.termination || !valid(match.durationSeconds)) {
     embed.setDescription(match.termination ? `Vorzeitig beendet${match.minutes === null ? '' : ` nach ca. ${match.minutes}′`}. EA-Wertung: ${match.own.goals}:${match.opponent.goals}.` : 'Die Spielzeit fehlt.');
@@ -133,10 +133,10 @@ function buildAnalysis(match, budget = 6000) {
     [midfield, finishing, defense, goalkeeper].forEach((analyze, index) => embed.addFields({ name: labels[index], value: analyze(match).slice(0, 1024) }));
     embed.addFields({ name: '🎯 Schwerpunkte für die Nachbesprechung', value: coachingFocus(match) });
     if (match.own.players.length) {
-      embed.setDescription('Analyse der erfassten Spielwerte im Vergleich zum Gegner. Fokus: Loco Squad.');
+      embed.setDescription(`Analyse der erfassten Spielwerte im Vergleich zum Gegner. Fokus: ${match.own.name}.`);
     }
   }
-  embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Fokus Loco Squad · Ursachen und Chancenqualität erfordern Spielszenen` });
+  embed.setFooter({ text: `Analyse v${ANALYSIS_VERSION} · Fokus ${match.own.name} · Ursachen und Chancenqualität erfordern Spielszenen` });
   return fitAnalysis(embed, budget);
 }
 module.exports = { ANALYSIS_VERSION, buildAnalysis, fitAnalysis, midfield, finishing, defense, goalkeeper, coachingFocus };

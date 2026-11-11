@@ -27,7 +27,8 @@ async function recoverPosted(channel, botId, now) {
           const layout = (message.embeds || []).map(e => /^Friendly Layout · (\d+)$/.exec(e.footer?.text || '')).find(Boolean);
           const files = [...(message.attachments?.values() || [])];
           const imagesPresent = ['ergebnis', 'loco-squad', 'gegner'].every(prefix => files.some(f => f.name === `${prefix}.png` || f.name?.startsWith(`${prefix}-`)) && (message.embeds || []).some(e => e.image?.url?.includes(prefix)));
-          posted[match[1]] = { imagesPresent, messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad') ? 4 : 1), analysisPresent: (message.embeds || []).some(e => e.title === '🔎 Matchanalyse · Loco Squad'), analysisVersion: Number(/^Analyse v(\d+)/.exec((message.embeds || []).find(e => e.title === '🔎 Matchanalyse · Loco Squad')?.footer?.text || '')?.[1] || 1) };
+          const analysis = (message.embeds || []).find(e => e.title?.startsWith('🔎 Matchanalyse · '));
+          posted[match[1]] = { imagesPresent, messageId: message.id, postedAt: new Date(message.createdTimestamp).toISOString(), layoutVersion: Math.max(layout ? Number(layout[1]) : 1, analysis ? 4 : 1), analysisPresent: Boolean(analysis), analysisVersion: Number(/^Analyse v(\d+)/.exec(analysis?.footer?.text || '')?.[1] || 1) };
         }
       }
     }
@@ -79,8 +80,8 @@ function assertImagePayload(payload) {
 }
 async function backfillAnalysis(channel, botId, rawMatches, data, save, options = {}) {
   let updated = 0;
-  const available = new Map(Object.entries(data.matchCache || {}).map(([id, entry]) => [id, parseMatch(entry.raw)]).filter(([,m]) => m));
-  for (const raw of rawMatches) { const m = parseMatch(raw); if (m) available.set(m.id, m); }
+  const available = new Map(Object.entries(data.matchCache || {}).map(([id, entry]) => [id, parseMatch(entry.raw, options.club)]).filter(([,m]) => m));
+  for (const raw of rawMatches) { const m = parseMatch(raw, options.club); if (m) available.set(m.id, m); }
   for (const [id, entry] of Object.entries(data.posted)) {
     if (entry.suppressed) continue;
     const match = available.get(id);
@@ -118,7 +119,7 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
       }
       const before = message.embeds.map(e => typeof e.toJSON === 'function' ? e.toJSON() : e);
       const embeds = before.map(e => EmbedBuilder.from(e));
-      const analysisIndex = embeds.findIndex(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
+      const analysisIndex = embeds.findIndex(e => e.data.title?.startsWith('🔎 Matchanalyse · '));
       if (available.has(id) && (analysisIndex < 0 || (entry.analysisVersion || 1) < ANALYSIS_VERSION)) {
         const others = embeds.filter((_, index) => index !== analysisIndex);
         const analysis = buildAnalysis(available.get(id), Math.max(500, 6000 - embedLength(others.map(e => e.toJSON()))));
@@ -135,8 +136,8 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
       }
       entry.layoutVersion = LAYOUT_VERSION;
 
-      entry.analysisPresent = embeds.some(e => e.data.title === '🔎 Matchanalyse · Loco Squad');
-      entry.analysisVersion = Number(/^Analyse v(\d+)/.exec(embeds.find(e => e.data.title === '🔎 Matchanalyse · Loco Squad')?.data.footer?.text || '')?.[1] || 1);
+      entry.analysisPresent = embeds.some(e => e.data.title?.startsWith('🔎 Matchanalyse · '));
+      entry.analysisVersion = Number(/^Analyse v(\d+)/.exec(embeds.find(e => e.data.title?.startsWith('🔎 Matchanalyse · '))?.data.footer?.text || '')?.[1] || 1);
       save(data);
     } catch (error) {
       console.error(`[friendly-matches] Post ${id} konnte nicht nachgepflegt werden:`, error.message);
@@ -146,14 +147,17 @@ async function backfillAnalysis(channel, botId, rawMatches, data, save, options 
 }
 
 function createService(client, options = {}) {
+  const { club = {}, ...overrides } = options;
+  const { clubId = CLUB_ID, channelId = CHANNEL_ID, platform = PLATFORM } = club;
+  const parse = raw => parseMatch(raw, club);
   const deps = {
     // EA positions only; do not read Discord lineup channels.
     enrichMatch: async match => match,
     repairMatches,
     load: store.load, save: store.save, fetchMatches: getFriendlyMatches, buildPayload, previewRequest, onMatches: () => {},
-    getChannel: () => client.channels.fetch(CHANNEL_ID),
+    getChannel: () => client.channels.fetch(channelId),
     recover: (channel, now) => recoverPosted(channel, client.user.id, now),
-    ...options,
+    ...overrides,
   };
   let running = false;
   let lastSlot = null;
@@ -172,23 +176,23 @@ function createService(client, options = {}) {
       try {
         const data = deps.load();
         data.matchCache ||= {};
-        for (const raw of deps.repairMatches || []) { const m = parseMatch(raw); if (m && !data.matchCache[m.id] && now.getTime() - Date.parse(m.timestamp) < 30*86400000) data.matchCache[m.id] = { raw }; }
+        for (const raw of deps.repairMatches || []) { const m = parse(raw); if (m && !data.matchCache[m.id] && now.getTime() - Date.parse(m.timestamp) < 30*86400000) data.matchCache[m.id] = { raw }; }
         const previewKey = deps.previewRequest?.key;
         if (latestPreview && previewKey && data.previewRequests?.[previewKey]) {
           previewDone = true;
           if (!isActive(now) && !closing) return;
         }
         const channel = await deps.getChannel();
-        if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${CHANNEL_ID} nicht erreichbar.`);
+        if (!channel?.isTextBased() || typeof channel.send !== 'function') throw new Error(`Statistikkanal ${channelId} nicht erreichbar.`);
         const recovered = await deps.recover(channel, now);
         for (const [id, entry] of Object.entries(recovered)) data.posted[id] = { ...data.posted[id], ...entry };
-        const raw = await deps.fetchMatches(CLUB_ID, PLATFORM, 50);
-        for (const row of raw) { const m = parseMatch(row); if (m) data.matchCache[m.id] = { raw: row }; }
-        for (const [id, entry] of Object.entries(data.matchCache)) if (now.getTime() - Date.parse(parseMatch(entry.raw)?.timestamp) > 30*86400000) delete data.matchCache[id];
+        const raw = await deps.fetchMatches(clubId, platform, 50);
+        for (const row of raw) { const m = parse(row); if (m) data.matchCache[m.id] = { raw: row }; }
+        for (const [id, entry] of Object.entries(data.matchCache)) if (now.getTime() - Date.parse(parse(entry.raw)?.timestamp) > 30*86400000) delete data.matchCache[id];
         deps.save(data);
         await deps.onMatches(raw, now);
-        const matches = candidates(Object.values(data.matchCache).map(entry => entry.raw), now, data.posted);
-        const latest = deps.previewRequest?.latest ? raw.map(parseMatch).filter(Boolean)
+        const matches = candidates(Object.values(data.matchCache).map(entry => entry.raw), now, data.posted, club);
+        const latest = deps.previewRequest?.latest ? raw.map(parse).filter(Boolean)
           .filter(m => Date.parse(m.timestamp) <= now.getTime()).sort((a,b) => b.timestamp.localeCompare(a.timestamp))[0] : null;
         const resolvedRequest = deps.previewRequest?.latest
           ? (latest && isPublishableMatch(latest) ? { ...deps.previewRequest, matchId: latest.id } : null)
@@ -198,7 +202,7 @@ function createService(client, options = {}) {
         const existing = refresh && data.posted[refresh.matchId];
         if (refresh?.refreshLayoutVersion && existing && (existing.layoutVersion || 1) < refresh.refreshLayoutVersion
           && now.getTime() < new Date(refresh.expiresAt).getTime()) {
-          const preview = raw.map(parseMatch).find(match => match?.id === refresh.matchId);
+          const preview = raw.map(parse).find(match => match?.id === refresh.matchId);
           if (!existing.suppressed && isPublishableMatch(preview)) {
             const message = await channel.messages.fetch(existing.messageId);
             if (message.author?.id !== client.user.id) throw new Error('Vorschau-Nachricht gehört nicht diesem Bot.');
@@ -212,7 +216,7 @@ function createService(client, options = {}) {
         // It uses the normal match marker, so Discord recovery also prevents replay after redeploy.
         const request = resolvedRequest;
         if (request && now.getTime() < new Date(request.expiresAt).getTime() && !data.posted[request.matchId]) {
-          const preview = raw.map(parseMatch).find(match => match?.id === request.matchId);
+          const preview = raw.map(parse).find(match => match?.id === request.matchId);
           if (isPublishableMatch(preview) && new Date(preview.timestamp) <= now && !matches.some(match => match.id === preview.id)) {
             matches.push(preview);
             matches.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -235,7 +239,7 @@ function createService(client, options = {}) {
           deps.save(data); previewDone = true;
           console.log(`[friendly-matches] Letzter-Friendly-Test abgeschlossen: ${resolvedRequest.matchId}.`);
         }
-        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch });
+        if (client.user?.id) await backfillAnalysis(channel, client.user.id, raw, data, deps.save, { buildPayload: deps.buildPayload, enrichMatch: deps.enrichMatch, club });
         return matches.length;
       } finally { running = false; }
     },
