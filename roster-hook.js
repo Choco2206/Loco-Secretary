@@ -3,8 +3,6 @@ const { Client, Events, EmbedBuilder, AttachmentBuilder } = require('discord.js'
 
 const ROSTER_TITLE = 'Aktuelle Kaderliste';
 const ACCENT_COLOR = 0xe84a8a;
-const ROSTER_BANNER_PATH = path.join(__dirname, 'assets', 'kaderliste-banner.png');
-const ROSTER_BANNER_NAME = 'kaderliste-banner.png';
 
 const ROSTERS = [
   {
@@ -12,13 +10,14 @@ const ROSTERS = [
     roleId: '1426495393742454834',
     clubName: 'Loco Squad',
     roleLabel: 'Loco-Squad-Rolle',
-    banner: true,
+    banner: 'kaderliste-banner.png',
   },
   {
     channelId: '1570488474052595762',
     roleId: '1570482104788197409',
     clubName: 'Locolinho',
     roleLabel: 'Locolinho-Rolle',
+    banner: 'locolinho-kaderliste.jpg',
   },
 ];
 
@@ -107,7 +106,7 @@ function buildRosterEmbed(members, config) {
     .setFooter({ text: `${players.length} Mitglieder mit der Rolle ${config.clubName}` })
     .setTimestamp();
 
-  if (config.banner) embed.setImage(`attachment://${ROSTER_BANNER_NAME}`);
+  if (config.banner) embed.setImage(`attachment://${config.banner}`);
   return embed;
 }
 
@@ -132,7 +131,7 @@ async function refreshRoster(client, channel, members, config) {
     embeds: [embed],
     allowedMentions: { parse: [] },
     files: config.banner
-      ? [new AttachmentBuilder(ROSTER_BANNER_PATH, { name: ROSTER_BANNER_NAME })]
+      ? [new AttachmentBuilder(path.join(__dirname, 'assets', config.banner), { name: config.banner })]
       : [],
   };
 
