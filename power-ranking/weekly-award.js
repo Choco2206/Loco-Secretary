@@ -7,7 +7,37 @@ const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 GlobalFonts.registerFromPath(path.join(__dirname, '..', 'assets', 'award-bold.ttf'), 'Award');
 const TEMPLATE = path.join(__dirname, '..', 'assets', 'loco-der-woche.png');
 const TEXT_VERSION = 2;
-const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
+const SQUAD_AWARD = { title: 'Loco der Woche', clubName: 'Loco Squad', roleId: '1426495393742454834' };
+const LOCOLINHO_AWARD = { title: 'Locolinho der Woche', clubName: 'Locolinho', roleId: '1570482104788197409' };
+
+async function drawLocolinhoLayout(ctx) {
+  const background = ctx.createLinearGradient(0, 0, 1254, 1254);
+  background.addColorStop(0, '#331014');
+  background.addColorStop(0.5, '#111116');
+  background.addColorStop(1, '#09090d');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, 1254, 1254);
+  ctx.strokeStyle = '#b92a35';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(34, 34, 1186, 1186);
+  const logo = await loadImage(path.join(__dirname, '..', 'assets', 'locolinho-award-logo.jpg'));
+  ctx.drawImage(logo, 73, 67, 227, 227);
+  fitText(ctx, 'LOCOLINHO', 755, 138, 820, 89);
+  fitText(ctx, 'DER WOCHE', 755, 233, 820, 83, '#ff4854');
+  ctx.beginPath();
+  ctx.arc(627, 554, 210, 0, Math.PI * 2);
+  ctx.strokeStyle = '#ff4854';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.fillStyle = '#211419';
+  ctx.fillRect(233, 722, 788, 101);
+  fitText(ctx, 'POWER RANKING · PLATZ 1', 627, 860, 700, 31, '#ff8790');
+  for (const [x, label] of [[274, 'SPIELE'], [628, 'Ø RATING'], [979, 'MOTM']]) {
+    ctx.fillStyle = '#211419';
+    ctx.fillRect(x - 135, 973, 270, 144);
+    fitText(ctx, label, x, 1086, 230, 25, '#ff8790');
+  }
+}
 
 function weekDetails(key) {
   const match = /^(\d{4})-W(\d{2})$/.exec(key);
@@ -42,13 +72,14 @@ function fitText(ctx, value, x, y, maxWidth, size, color = '#ffffff') {
   ctx.fillText(text, x, y, maxWidth);
 }
 
-async function renderAward(row, key, displayName, avatarUrl) {
-  const background = await loadImage(TEMPLATE);
-  const canvas = createCanvas(background.width, background.height);
+async function renderAward(row, key, displayName, avatarUrl, branding = SQUAD_AWARD) {
+  const background = branding === LOCOLINHO_AWARD ? null : await loadImage(TEMPLATE);
+  const canvas = createCanvas(background?.width ?? 1254, background?.height ?? 1254);
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(background, 0, 0);
+  if (background) ctx.drawImage(background, 0, 0);
+  else await drawLocolinhoLayout(ctx);
   // Coordinates refer to the approved square template's 1254px design grid.
-  ctx.scale(background.width / 1254, background.height / 1254);
+  ctx.scale(canvas.width / 1254, canvas.height / 1254);
   ctx.save();
   // The foreground nameplate overlaps the bottom of the portrait frame.
   ctx.beginPath();
@@ -87,24 +118,24 @@ async function renderAward(row, key, displayName, avatarUrl) {
   return canvas.toBuffer('image/png');
 }
 
-function awardMarker(key) { return `Loco der Woche · ${key}`; }
+function awardMarker(key, branding = SQUAD_AWARD) { return `${branding.title} · ${key}`; }
 
-function awardPayload(ranking, key, image) {
+function awardPayload(ranking, key, image, branding = SQUAD_AWARD) {
   const week = weekDetails(key);
   const embed = new EmbedBuilder()
     .setColor(0xe52525)
-    .setTitle(`👑 Loco der Woche · ${week.label}`)
+    .setTitle(`👑 ${branding.title} · ${week.label}`)
     .setImage('attachment://loco-der-woche.png')
-    .setFooter({ text: awardMarker(key) });
+    .setFooter({ text: awardMarker(key, branding) });
   return {
-    content: `<@&${LOCO_SQUAD_ROLE_ID}> 👑 **LOCO DER WOCHE** · ${week.label}`,
+    content: `<@&${branding.roleId}> 👑 **${branding.title.toUpperCase()}** · ${week.label}`,
     embeds: [embed],
     files: [new AttachmentBuilder(image, { name: 'loco-der-woche.png' })],
-    allowedMentions: { parse: [], roles: [LOCO_SQUAD_ROLE_ID] },
+    allowedMentions: { parse: [], roles: [branding.roleId] },
   };
 }
 
-function awardTextPayload(ranking, key) {
+function awardTextPayload(ranking, key, branding = SQUAD_AWARD) {
   const winner = ranking[0];
   const week = weekDetails(key);
   const stat = (row, key) => row[key] == null ? 'nicht gespeichert' : number(row[key]);
@@ -121,7 +152,7 @@ function awardTextPayload(ranking, key) {
     content: [
       `🔥 **DIESE WOCHE GEHÖRT DIR!**`,
       '',
-      `👑 <@${winner.discordId}>, herzlichen Glückwunsch zur Auszeichnung **Loco der Woche**!`,
+      `👑 <@${winner.discordId}>, herzlichen Glückwunsch zur Auszeichnung **${branding.title}**!`,
       `**${number(winner.points)} Punkte** auf dem Konto und Platz 1 im Power Ranking. Du hast dir die Krone geholt. Lass dich feiern! 🐺🏆`,
       '',
       '🥇 **PLATZ 1 IN ZAHLEN**',
@@ -131,7 +162,7 @@ function awardTextPayload(ranking, key) {
       ...(podium.length ? ['', 'Auch an euch: starke Leistung, verdient auf dem Podium! 👏'] : []),
       '',
       'Die Punkte werden pro Spiel nach der gespielten Position gewichtet und über die Woche addiert. Pässe zählen je volle 10 pro Spiel.',
-      'Neue Woche, neue Chance. **Vamos, Loco Squad!** 🔴⚫',
+      `Neue Woche, neue Chance. **Vamos, ${branding.clubName}!** 🔴⚫`,
       '',
       `📅 **${week.label} · ${week.range}**`,
       `Wertung: ${week.starts}, 07:00 Uhr bis ${week.ends}, 07:00 Uhr (deutsche Zeit).`,
@@ -140,14 +171,14 @@ function awardTextPayload(ranking, key) {
   };
 }
 
-async function publishAward({ target, guild, botId, key, archive, savePublication, render = renderAward }) {
+async function publishAward({ target, guild, botId, key, archive, savePublication, render = renderAward, branding = SQUAD_AWARD }) {
   if (archive.publicationStatus === 'posted' && archive.textVersion !== TEXT_VERSION && archive.textMessageId) {
     const message = await target.messages.fetch(archive.textMessageId).catch((error) => {
       if (error.code === 10008) return null;
       throw error;
     });
     if (message?.author.id === botId) {
-      await message.edit({ ...awardTextPayload(archive.ranking, key), allowedMentions: { parse: [] } });
+      await message.edit({ ...awardTextPayload(archive.ranking, key, branding), allowedMentions: { parse: [] } });
       savePublication({ textVersion: TEXT_VERSION });
     } else if (!message) {
       savePublication({ textVersion: TEXT_VERSION });
@@ -162,7 +193,7 @@ async function publishAward({ target, guild, botId, key, archive, savePublicatio
   // A failed state write or timeout after Discord accepted the post must not create a duplicate.
   const messages = await target.messages.fetch({ limit: 100 });
   let existing = messages.find((message) => message.author.id === botId
-    && message.embeds.some((embed) => embed.footer?.text === awardMarker(key)));
+    && message.embeds.some((embed) => embed.footer?.text === awardMarker(key, branding)));
   if (!existing && archive.messageId) {
     existing = await target.messages.fetch(archive.messageId).catch((error) => {
       if (error.code === 10008) return null;
@@ -173,14 +204,14 @@ async function publishAward({ target, guild, botId, key, archive, savePublicatio
     const winner = archive.ranking[0];
     const member = await guild.members.fetch(winner.discordId).catch(() => null);
     const image = await render(winner, key, member?.displayName || winner.playerName,
-      member?.displayAvatarURL({ extension: 'png', size: 512 }));
-    existing = await target.send(awardPayload(archive.ranking, key, image));
+      member?.displayAvatarURL({ extension: 'png', size: 512 }), branding);
+    existing = await target.send(awardPayload(archive.ranking, key, image, branding));
   }
   savePublication({ publicationStatus: 'pending', messageId: existing.id });
-  const textPayload = awardTextPayload(archive.ranking, key);
+  const textPayload = awardTextPayload(archive.ranking, key, branding);
   let textMessage = messages.find((message) => message.author.id === botId && message.content === textPayload.content);
   if (!textMessage) textMessage = await target.send(textPayload);
   savePublication({ publicationStatus: 'posted', messageId: existing.id, textMessageId: textMessage.id, textVersion: TEXT_VERSION, postedAt: new Date().toISOString() });
 }
 
-module.exports = { TEXT_VERSION, weekDetails, renderAward, awardPayload, awardTextPayload, publishAward, awardMarker };
+module.exports = { LOCOLINHO_AWARD, TEXT_VERSION, weekDetails, renderAward, awardPayload, awardTextPayload, publishAward, awardMarker };

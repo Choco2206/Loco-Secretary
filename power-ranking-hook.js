@@ -20,9 +20,9 @@ const {
 const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
 const squadStore = require('./power-ranking/store');
 const { POSITION_LABELS, SCORING, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
-const { publishAward, TEXT_VERSION } = require('./power-ranking/weekly-award');
+const { publishAward, TEXT_VERSION, LOCOLINHO_AWARD } = require('./power-ranking/weekly-award');
 
-function createRanking({ channels: CHANNELS, roleId, store, clubName, componentPrefix = '', title = 'Loco Power Ranking' }) {
+function createRanking({ channels: CHANNELS, roleId, store, clubName, componentPrefix = '', awardBranding, title = 'Loco Power Ranking' }) {
 const adminTitle = `👑 ${title} · Admin`;
 const rankingTitle = `👑 ${title}`;
 const componentId = (id) => componentPrefix + id;
@@ -671,7 +671,7 @@ async function archiveWeekIfNeeded(client, guild) {
         };
       });
       await publishAward({
-        target, guild, botId: client.user.id, key, archive,
+        target, guild, botId: client.user.id, key, archive, branding: awardBranding,
         savePublication: (publication) => store.update((next) => {
           Object.assign(next.weeklyArchive[key], publication, { ranking: archive.ranking });
           return next;
@@ -1044,7 +1044,7 @@ const squad = createRanking({
 });
 
 const locolinho = createRanking({
-  channels: { admin: '1570499656004411572', ranking: '1570488814567428106' },
+  channels: { admin: '1570499656004411572', ranking: '1570488814567428106', playerOfWeek: '1570488814567428106' },
   roleId: '1570482104788197409',
   store: squadStore.createStore('powerRankingLocolinho.json', {
     clubId: '492736',
@@ -1055,6 +1055,7 @@ const locolinho = createRanking({
   }),
   clubName: 'Locolinho',
   componentPrefix: 'locolinho:',
+  awardBranding: LOCOLINHO_AWARD,
   title: 'Locolinho Power Ranking',
 });
 
