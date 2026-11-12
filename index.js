@@ -1,6 +1,4 @@
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
 
 const {
   Client,
@@ -13,7 +11,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
-  UserSelectMenuBuilder,
   MessageFlags,
   ChannelType,
   PermissionFlagsBits,
@@ -33,15 +30,6 @@ const POSITION_LABELS = {
   ST: 'ST',
 };
 
-const JERSEY_RANGES = [
-  { key: '1_24', label: '1 bis 24', min: 1, max: 24 },
-  { key: '25_49', label: '25 bis 49', min: 25, max: 49 },
-  { key: '50_74', label: '50 bis 74', min: 50, max: 74 },
-  { key: '75_99', label: '75 bis 99', min: 75, max: 99 },
-];
-
-const JERSEY_FILE = path.join(__dirname, 'data', 'jerseyNumbers.json');
-
 const CONFIG = {
   locoVoteBotId: '1478770226651992134',
   ownerUserId: '1425580097661833443',
@@ -51,7 +39,6 @@ const CONFIG = {
     goodbye: '1426178916455944242',
     announcements: '1426178139234631700',
     positions: '1439254263112011787',
-    jerseys: '1446131615469146243',
   },
 
   roles: {
@@ -101,7 +88,6 @@ Und nur damit du direkt weißt, worauf du dich hier eingelassen hast, Süßer:
 **Bevor du loslegst:**
 
 → Wähle zuerst deine **Hauptposition + Nebenpositionen** in <#1439254263112011787>  
-→ Such dir deine **Trikotnummer** in <#1446131615469146243>  
 → Lies dir kurz <#1426178300522532935> durch  
 → Check regelmäßig <#1426178139234631700> für wichtige News  
 
@@ -211,11 +197,6 @@ nur eben ohne diesen Part der Geschichte. 🔴⚫`,
   positionPanel: {
     enabled: true,
     title: '📍 Loco Positionen',
-  },
-
-  jerseyPanel: {
-    enabled: true,
-    title: '👕 Loco Trikotnummern',
   },
 
   squadChannels: {
@@ -963,291 +944,6 @@ async function ensurePositionPanelMessage() {
   }
 }
 
-/* -------------------- JERSEY SYSTEM -------------------- */
-
-function ensureJerseyFile() {
-  try {
-    const dataDir = path.dirname(JERSEY_FILE);
-
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    if (!fs.existsSync(JERSEY_FILE)) {
-      fs.writeFileSync(JERSEY_FILE, JSON.stringify({}, null, 2), 'utf8');
-    }
-  } catch (error) {
-    console.error('[jersey] Fehler beim Erstellen der Datei:', error.message);
-  }
-}
-
-function loadJerseyNumbers() {
-  try {
-    ensureJerseyFile();
-    const raw = fs.readFileSync(JERSEY_FILE, 'utf8');
-    const parsed = JSON.parse(raw || '{}');
-
-    const cleaned = {};
-    for (const [userId, number] of Object.entries(parsed)) {
-      const num = Number(number);
-      if (Number.isInteger(num) && num >= 1 && num <= 99) {
-        cleaned[userId] = num;
-      }
-    }
-
-    return cleaned;
-  } catch (error) {
-    console.error('[jersey] Fehler beim Laden:', error.message);
-    return {};
-  }
-}
-
-function saveJerseyNumbers(data) {
-  try {
-    ensureJerseyFile();
-    fs.writeFileSync(JERSEY_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    console.error('[jersey] Fehler beim Speichern:', error.message);
-  }
-}
-
-function getUserJerseyNumber(userId, data) {
-  return data[userId] ?? null;
-}
-
-function findUserIdByJerseyNumber(number, data) {
-  return Object.keys(data).find((userId) => data[userId] === number) || null;
-}
-
-function removeJerseyNumberByUser(userId, data) {
-  delete data[userId];
-}
-
-function assignJerseyNumber(userId, number, data) {
-  const currentOwner = findUserIdByJerseyNumber(number, data);
-  if (currentOwner) {
-    delete data[currentOwner];
-  }
-
-  delete data[userId];
-  data[userId] = number;
-}
-
-function getFreeNumbersInRange(min, max, data) {
-  const taken = new Set(Object.values(data));
-
-  const free = [];
-  for (let i = min; i <= max; i += 1) {
-    if (!taken.has(i)) {
-      free.push(i);
-    }
-  }
-
-  return free;
-}
-
-function getTakenNumbersInRange(min, max, data) {
-  const taken = [];
-
-  for (let i = min; i <= max; i += 1) {
-    const ownerId = findUserIdByJerseyNumber(i, data);
-    if (ownerId) {
-      taken.push({ number: i, ownerId });
-    }
-  }
-
-  return taken;
-}
-
-function formatJerseyNumber(number) {
-  return String(number).padStart(2, '0');
-}
-
-function buildJerseyPanelEmbed(data) {
-  const lines = [];
-
-  for (let i = 1; i <= 99; i += 1) {
-    const ownerId = findUserIdByJerseyNumber(i, data);
-    lines.push(`**${formatJerseyNumber(i)}** → ${ownerId ? `<@${ownerId}>` : 'frei'}`);
-  }
-
-  return new EmbedBuilder()
-    .setColor(CONFIG.branding.accentColor)
-    .setTitle(CONFIG.jerseyPanel.title)
-    .setDescription(
-      [
-        'Wähle hier deine Trikotnummer.',
-        '',
-        '**Wichtig:**',
-        '• jede Nummer kann nur **einmal** vergeben sein',
-        '• wenn du eine neue nimmst, wird deine alte automatisch ersetzt',
-        '• freie Nummern werden dir bei der Auswahl angezeigt',
-        '',
-        lines.join('\n'),
-      ].join('\n')
-    )
-    .setFooter({ text: CONFIG.branding.footer })
-    .setTimestamp();
-}
-
-function createJerseyButtons() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('jersey_choose')
-      .setLabel('Trikotnummer wählen')
-      .setStyle(ButtonStyle.Primary),
-
-    new ButtonBuilder()
-      .setCustomId('jersey_show')
-      .setLabel('Meine Nummer')
-      .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-      .setCustomId('jersey_remove')
-      .setLabel('Nummer entfernen')
-      .setStyle(ButtonStyle.Danger),
-
-    new ButtonBuilder()
-      .setCustomId('jersey_admin')
-      .setLabel('Admin vergeben')
-      .setStyle(ButtonStyle.Secondary),
-
-    new ButtonBuilder()
-      .setCustomId('jersey_refresh')
-      .setLabel('Panel aktualisieren')
-      .setStyle(ButtonStyle.Secondary)
-  );
-}
-
-function createJerseyAdminReleaseButton() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('jersey_admin_release')
-      .setLabel('Admin Nummer freigeben')
-      .setStyle(ButtonStyle.Danger)
-  );
-}
-
-function createJerseyRangeMenu(customIdPrefix = 'jersey_range') {
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(customIdPrefix)
-      .setPlaceholder('Wähle einen Nummernbereich')
-      .setMinValues(1)
-      .setMaxValues(1)
-      .addOptions(
-        JERSEY_RANGES.map((range) => ({
-          label: range.label,
-          value: range.key,
-        }))
-      )
-  );
-}
-
-function createJerseyTakenNumberMenu(rangeKey, data, customIdPrefix) {
-  const range = JERSEY_RANGES.find((r) => r.key === rangeKey);
-  if (!range) return null;
-
-  const takenNumbers = getTakenNumbersInRange(range.min, range.max, data);
-  if (takenNumbers.length === 0) return null;
-
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`${customIdPrefix}:${range.key}`)
-      .setPlaceholder(`Belegte Nummern aus ${range.label}`)
-      .setMinValues(1)
-      .setMaxValues(1)
-      .addOptions(
-        takenNumbers.map(({ number, ownerId }) => ({
-          label: `${formatJerseyNumber(number)} - ${ownerId}`,
-          description: `Aktuell vergeben an ${ownerId}`,
-          value: String(number),
-        }))
-      )
-  );
-}
-
-function createJerseyNumberMenu(rangeKey, data, customIdPrefix = 'jersey_number') {
-  const range = JERSEY_RANGES.find((r) => r.key === rangeKey);
-  if (!range) return null;
-
-  const freeNumbers = getFreeNumbersInRange(range.min, range.max, data);
-  if (freeNumbers.length === 0) return null;
-
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId(`${customIdPrefix}:${range.key}`)
-      .setPlaceholder(`Freie Nummern aus ${range.label}`)
-      .setMinValues(1)
-      .setMaxValues(1)
-      .addOptions(
-        freeNumbers.map((number) => ({
-          label: formatJerseyNumber(number),
-          value: String(number),
-        }))
-      )
-  );
-}
-
-function createAdminUserSelectMenu() {
-  return new ActionRowBuilder().addComponents(
-    new UserSelectMenuBuilder()
-      .setCustomId('jersey_admin_user')
-      .setPlaceholder('Wähle einen User')
-      .setMinValues(1)
-      .setMaxValues(1)
-  );
-}
-
-async function ensureJerseyPanelMessage() {
-  if (!CONFIG.jerseyPanel.enabled) return;
-
-  try {
-    const channel = getChannel(CONFIG.channels.jerseys);
-    if (!channel || !channel.isTextBased()) {
-      console.error('[jerseyPanel] Kanal nicht gefunden oder nicht textbasiert.');
-      return;
-    }
-
-    const data = loadJerseyNumbers();
-    const fetched = await channel.messages.fetch({ limit: 20 });
-
-    const existingMessage = [...fetched.values()].find((msg) => {
-      if (msg.author?.id !== client.user.id) return false;
-      const firstEmbed = msg.embeds?.[0];
-      return firstEmbed?.title === CONFIG.jerseyPanel.title;
-    });
-
-    const payload = {
-      embeds: [buildJerseyPanelEmbed(data)],
-      components: [createJerseyButtons(), createJerseyAdminReleaseButton()],
-    };
-
-    if (existingMessage) {
-      await existingMessage.edit(payload);
-      console.log('[jerseyPanel] Bestehende Trikotnummern-Nachricht aktualisiert.');
-    } else {
-      await channel.send(payload);
-      console.log('[jerseyPanel] Neue Trikotnummern-Nachricht gesendet.');
-    }
-  } catch (error) {
-    console.error('[jerseyPanel] Fehler beim Erstellen/Aktualisieren:', error.message);
-  }
-}
-
-async function releaseJerseyNumberForUser(userId) {
-  const data = loadJerseyNumbers();
-  const currentNumber = getUserJerseyNumber(userId, data);
-
-  if (!currentNumber) return null;
-
-  removeJerseyNumberByUser(userId, data);
-  saveJerseyNumbers(data);
-  await ensureJerseyPanelMessage();
-
-  return currentNumber;
-}
-
 /* -------------------- READY / WELCOME / GOODBYE -------------------- */
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -1257,7 +953,6 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`📌 Goodbye Channel: ${CONFIG.channels.goodbye}`);
   console.log(`📌 Announcement Channel: ${CONFIG.channels.announcements}`);
   console.log(`📌 Position Channel: ${CONFIG.channels.positions}`);
-  console.log(`📌 Jersey Channel: ${CONFIG.channels.jerseys}`);
 
   ensureJerseyFile();
   await ensurePositionPanelMessage();
@@ -1301,11 +996,6 @@ client.on(Events.GuildBanAdd, async (ban) => {
 });
 
 client.on(Events.GuildMemberRemove, async (member) => {
-  const releasedNumber = await releaseJerseyNumberForUser(member.id);
-  if (releasedNumber) {
-    console.log(`[jersey] Nummer ${formatJerseyNumber(releasedNumber)} von ${member.id} automatisch freigegeben.`);
-  }
-
   if (!CONFIG.goodbye.enabled) return;
   if (recentBanIds.has(member.id)) return;
 
@@ -1416,119 +1106,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      /* JERSEY BUTTONS */
-      if (interaction.customId === 'jersey_choose') {
-        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
-          await interaction.reply({
-            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: 'Wähle zuerst einen Bereich für deine Trikotnummer:',
-          components: [createJerseyRangeMenu('jersey_range')],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId === 'jersey_show') {
-        const data = loadJerseyNumbers();
-        const currentNumber = getUserJerseyNumber(interaction.user.id, data);
-
-        await interaction.reply({
-          content: currentNumber
-            ? `Deine aktuelle Trikotnummer ist **${formatJerseyNumber(currentNumber)}**.`
-            : 'Du hast aktuell keine Trikotnummer.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId === 'jersey_remove') {
-        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad) && interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const data = loadJerseyNumbers();
-        const currentNumber = getUserJerseyNumber(interaction.user.id, data);
-
-        if (!currentNumber) {
-          await interaction.reply({
-            content: 'Du hast aktuell keine Trikotnummer, die entfernt werden könnte.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        removeJerseyNumberByUser(interaction.user.id, data);
-        saveJerseyNumbers(data);
-        await ensureJerseyPanelMessage();
-
-        await interaction.reply({
-          content: `Deine Trikotnummer **${formatJerseyNumber(currentNumber)}** wurde entfernt.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId === 'jersey_admin') {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: 'Wähle den User aus, dem du manuell eine Trikotnummer geben willst:',
-          components: [createAdminUserSelectMenu()],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId === 'jersey_admin_release') {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: 'Wähle zuerst den Nummernbereich, aus dem du eine belegte Nummer freigeben willst:',
-          components: [createJerseyRangeMenu('jersey_admin_release_range')],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId === 'jersey_refresh') {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await ensureJerseyPanelMessage();
-
-        await interaction.reply({
-          content: 'Das Trikotnummern-Panel wurde aktualisiert.',
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
     }
 
     /* ---------- STRING SELECT MENUS ---------- */
@@ -1619,221 +1196,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      /* JERSEY MENUS USER FLOW */
-      if (interaction.customId === 'jersey_range') {
-        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
-          await interaction.reply({
-            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const rangeKey = interaction.values[0];
-        const data = loadJerseyNumbers();
-        const numberMenu = createJerseyNumberMenu(rangeKey, data, 'jersey_number');
-
-        if (!numberMenu) {
-          await interaction.reply({
-            content: 'In diesem Bereich sind aktuell keine freien Nummern mehr verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: 'Wähle jetzt deine freie Trikotnummer:',
-          components: [numberMenu],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId.startsWith('jersey_number:')) {
-        if (!interaction.member.roles.cache.has(CONFIG.roles.locoSquad)) {
-          await interaction.reply({
-            content: 'Diese Funktion ist nur für Mitglieder mit der Rolle **Loco Squad** verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const chosenNumber = Number(interaction.values[0]);
-        const data = loadJerseyNumbers();
-
-        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
-        if (ownerId && ownerId !== interaction.user.id) {
-          await interaction.reply({
-            content: 'Diese Nummer ist leider gerade nicht mehr frei. Versuch bitte eine andere.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const oldNumber = getUserJerseyNumber(interaction.user.id, data);
-        assignJerseyNumber(interaction.user.id, chosenNumber, data);
-        saveJerseyNumbers(data);
-        await ensureJerseyPanelMessage();
-
-        await interaction.reply({
-          content: oldNumber
-            ? `Deine Trikotnummer wurde von **${formatJerseyNumber(oldNumber)}** auf **${formatJerseyNumber(chosenNumber)}** geändert.`
-            : `Deine Trikotnummer ist jetzt **${formatJerseyNumber(chosenNumber)}**.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      /* JERSEY MENUS ADMIN FLOW */
-      if (interaction.customId === 'jersey_admin_release_range') {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const rangeKey = interaction.values[0];
-        const data = loadJerseyNumbers();
-        const numberMenu = createJerseyTakenNumberMenu(rangeKey, data, 'jersey_admin_release_number');
-
-        if (!numberMenu) {
-          await interaction.reply({
-            content: 'In diesem Bereich ist aktuell keine Nummer belegt.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: 'Wähle jetzt die belegte Nummer, die freigegeben werden soll:',
-          components: [numberMenu],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId.startsWith('jersey_admin_release_number:')) {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const chosenNumber = Number(interaction.values[0]);
-        const data = loadJerseyNumbers();
-        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
-
-        if (!ownerId) {
-          await interaction.reply({
-            content: 'Diese Nummer ist inzwischen schon frei.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        removeJerseyNumberByUser(ownerId, data);
-        saveJerseyNumbers(data);
-        await ensureJerseyPanelMessage();
-
-        await interaction.reply({
-          content: `Die Trikotnummer ${formatJerseyNumber(chosenNumber)} von <@${ownerId}> wurde freigegeben.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId.startsWith('jersey_admin_range:')) {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const targetUserId = interaction.customId.split(':')[1];
-        const rangeKey = interaction.values[0];
-        const data = loadJerseyNumbers();
-        const numberMenu = createJerseyNumberMenu(rangeKey, data, `jersey_admin_number:${targetUserId}`);
-
-        if (!numberMenu) {
-          await interaction.reply({
-            content: 'In diesem Bereich sind aktuell keine freien Nummern mehr verfügbar.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        await interaction.reply({
-          content: `Wähle jetzt die freie Nummer für <@${targetUserId}>:`,
-          components: [numberMenu],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-
-      if (interaction.customId.startsWith('jersey_admin_number:')) {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const targetUserId = interaction.customId.split(':')[1];
-        const chosenNumber = Number(interaction.values[0]);
-
-        const data = loadJerseyNumbers();
-        const ownerId = findUserIdByJerseyNumber(chosenNumber, data);
-
-        if (ownerId && ownerId !== targetUserId) {
-          await interaction.reply({
-            content: 'Diese Nummer ist leider gerade nicht mehr frei. Versuch bitte eine andere.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const oldNumber = getUserJerseyNumber(targetUserId, data);
-        assignJerseyNumber(targetUserId, chosenNumber, data);
-        saveJerseyNumbers(data);
-        await ensureJerseyPanelMessage();
-
-        await interaction.reply({
-          content: oldNumber
-            ? `Du hast <@${targetUserId}> die Nummer von **${formatJerseyNumber(oldNumber)}** auf **${formatJerseyNumber(chosenNumber)}** geändert.`
-            : `Du hast <@${targetUserId}> die Trikotnummer **${formatJerseyNumber(chosenNumber)}** gegeben.`,
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-    }
-
-    /* ---------- USER SELECT MENUS ---------- */
-    if (interaction.isUserSelectMenu()) {
-      if (interaction.customId === 'jersey_admin_user') {
-        if (interaction.user.id !== CONFIG.ownerUserId) {
-          await interaction.reply({
-            content: 'Diesen Button kannst nur du benutzen.',
-            flags: MessageFlags.Ephemeral,
-          });
-          return;
-        }
-
-        const targetUserId = interaction.values[0];
-
-        await interaction.reply({
-          content: `Wähle jetzt den Bereich für <@${targetUserId}>:`,
-          components: [createJerseyRangeMenu(`jersey_admin_range:${targetUserId}`)],
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
     }
   } catch (error) {
     console.error('[interactionCreate] Fehler:', error);
