@@ -72,4 +72,12 @@ const squad = createStore('powerRanking.json', {
   linkedAt: 'initial-config',
 });
 
-module.exports = { ...squad, createStore };
+const locolinho = createStore('powerRankingLocolinho.json', {
+  clubId: '492736',
+  name: 'Locolinho',
+  platform: 'common-gen5',
+  platformLabel: 'PS5 / Xbox Series / PC',
+  linkedAt: 'initial-config',
+});
+
+module.exports = { ...squad, createStore, locolinho };

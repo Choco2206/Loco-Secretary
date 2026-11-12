@@ -721,9 +721,8 @@ function assignManualProfile(data, targetId, player, adminId, expectedClubId) {
 }
 
 async function refreshPlayerForms(client) {
-  if (componentPrefix) return false;
   try {
-    await require('./player-form-hook').refresh(client);
+    await require('./player-form-hook').refresh(client, clubName);
     return true;
   } catch (error) {
     console.error('[power-ranking] Formkurven-Aktualisierung fehlgeschlagen:', error.message);
@@ -892,7 +891,6 @@ async function handleInteraction(interaction, client) {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await refreshPanels(client, interaction.guild);
-      if (componentPrefix) return interaction.editReply('✅ Admin-Übersicht und Ranking wurden aktualisiert.');
       const formUpdated = await refreshPlayerForms(client);
       return interaction.editReply(formUpdated ? '✅ Admin-Übersicht, Ranking und Spieler-Formkurven wurden aktualisiert.' : '✅ Admin-Übersicht und Ranking wurden aktualisiert. Die Formkurven konnten gerade nicht aktualisiert werden. Bitte erneut versuchen.');
     }
@@ -1046,13 +1044,7 @@ const squad = createRanking({
 const locolinho = createRanking({
   channels: { admin: '1570499656004411572', ranking: '1570488814567428106', playerOfWeek: '1570488814567428106' },
   roleId: '1570482104788197409',
-  store: squadStore.createStore('powerRankingLocolinho.json', {
-    clubId: '492736',
-    name: 'Locolinho',
-    platform: 'common-gen5',
-    platformLabel: 'PS5 / Xbox Series / PC',
-    linkedAt: 'initial-config',
-  }),
+  store: squadStore.locolinho,
   clubName: 'Locolinho',
   componentPrefix: 'locolinho:',
   awardBranding: LOCOLINHO_AWARD,

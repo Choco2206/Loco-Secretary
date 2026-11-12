@@ -8,12 +8,12 @@ const { ingest } = require('./model');
 const { marker, payload } = require('./embed');
 const CHANNEL_ID = '1560060808799723601';
 const ROLE_ID = '1426495393742454834';
-async function members(guild) {
+async function members(guild, roleId = ROLE_ID) {
   const result = new Map(); let after;
   for (let page = 0; page < 100; page++) {
     const batch = await guild.members.list({ limit: 1000, ...(after ? { after } : {}) });
     for (const member of batch.values()) result.set(member.id, member);
-    if (batch.size < 1000) return [...result.values()].filter(m => !m.user.bot && m.roles.cache.has(ROLE_ID));
+    if (batch.size < 1000) return [...result.values()].filter(m => !m.user.bot && m.roles.cache.has(roleId));
     const next = batch.last().id;
     if (next === after) throw new Error('Mitgliederliste konnte nicht vollständig gelesen werden.');
     after = next;
@@ -36,9 +36,11 @@ async function recover(channel, botId) {
 }
 function fingerprint(p) { return crypto.createHash('sha256').update(JSON.stringify(p.embeds.map(e => e.toJSON()))).digest('hex'); }
 function createService(client, options = {}) {
+  const { clubId = CLUB_ID, channelId = CHANNEL_ID, roleId = ROLE_ID, rankingChannel } = options;
   const deps = { load: store.load, save: store.save, ranking: rankingStore.load,
-    fetchMatches: getFriendlyMatches, getChannel: () => client.channels.fetch(CHANNEL_ID),
-    members, recover, buildPayload: payload, ...options };
+    fetchMatches: getFriendlyMatches, getChannel: () => client.channels.fetch(channelId),
+    members: (guild) => members(guild, roleId), recover,
+    buildPayload: (member, link, data) => payload(member, link, data, { clubId, rankingChannel }), ...options };
   let running = false; let lastSlot;
   let completion = Promise.resolve(); let finish;
   return {
@@ -56,7 +58,7 @@ function createService(client, options = {}) {
       const data = deps.load();
       const parts = localParts(now);
       if (!forceRefresh && (isActive(now) || (Number(parts.hour) === 4 && Number(parts.minute) === 0))) {
-        try { ingest(data, await deps.fetchMatches(CLUB_ID, PLATFORM, 50), now); deps.save(data); }
+        try { ingest(data, await deps.fetchMatches(clubId, PLATFORM, 50), now, clubId); deps.save(data); }
         catch (error) { console.error('[player-form] EA-Abfrage fehlgeschlagen, bestehende Werte bleiben erhalten:', error.message); }
       }
       const channel = await deps.getChannel();
@@ -64,15 +66,19 @@ function createService(client, options = {}) {
       const roster = (await deps.members(channel.guild)).sort((a, b) => a.displayName.localeCompare(b.displayName, 'de'));
       const recovered = await deps.recover(channel, client.user.id);
       const links = deps.ranking().links || {};
+      const linkFor = (member) => {
+        const link = links[member.id];
+        return clubId === CLUB_ID || String(link?.clubId) === clubId ? link : null;
+      };
       // Reject duplicate account assignments instead of giving two people the same statistics.
       const ids = new Map(); const names = new Map();
       for (const member of roster) {
-        const link = links[member.id]; if (!link) continue;
+        const link = linkFor(member); if (!link) continue;
         if (link.playerId) { const key = String(link.playerId); ids.set(key, (ids.get(key) || 0) + 1); }
         if (link.playerName) { const key = require('./model').normalizeName(link.playerName); names.set(key, (names.get(key) || 0) + 1); }
       }
       for (const member of roster) {
-        let link = links[member.id];
+        let link = linkFor(member);
         if (link && ((link.playerId && ids.get(String(link.playerId)) > 1) || (!link.playerId && names.get(require('./model').normalizeName(link.playerName)) > 1))) link = null;
         const p = deps.buildPayload(member, link, data); const hash = fingerprint(p);
         let message = recovered.get(member.id);

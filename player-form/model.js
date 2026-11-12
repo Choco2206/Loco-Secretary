@@ -6,12 +6,12 @@ const { CLUB_ID, isActive, parseMatch, normalizePosition } = (() => {
 const POSITIONS = ['goalkeeper', 'defender', 'midfielder', 'forward'];
 const MIN_PLAYER_SECONDS = 45 * 60;
 function normalizeName(value) { return String(value || '').trim().normalize('NFKC').toLowerCase(); }
-function ingest(data, rawMatches, now = new Date()) {
+function ingest(data, rawMatches, now = new Date(), clubId = CLUB_ID) {
   let added = 0;
   for (const raw of rawMatches) {
-    const m = parseMatch(raw);
+    const m = parseMatch(raw, { clubId });
     if (!m || new Date(m.timestamp) > now || !isActive(new Date(m.timestamp))) continue;
-    const entry = { id: m.id, clubId: CLUB_ID, timestamp: m.timestamp, minutes: m.minutes, termination: m.termination,
+    const entry = { id: m.id, clubId, timestamp: m.timestamp, minutes: m.minutes, termination: m.termination,
       players: m.own.players };
     if (!data.matches[m.id]) added++;
     // EA can fill in player data later; keep the latest available snapshot.
@@ -46,11 +46,11 @@ function summarize(rows) {
     goalsTotal: rows.length && rows.every(p => typeof p.goals === 'number' && Number.isFinite(p.goals)) ? rows.reduce((n, p) => n + p.goals, 0) : null,
     assistsTotal: rows.length && rows.every(p => typeof p.assists === 'number' && Number.isFinite(p.assists)) ? rows.reduce((n, p) => n + p.assists, 0) : null, tackles: average(rows, 'tackles'), saves: average(rows, 'saves') };
 }
-function playerForm(data, link) {
+function playerForm(data, link, clubId = CLUB_ID) {
   const buckets = Object.fromEntries(POSITIONS.map(p => [p, []]));
   let excluded = 0;
   for (const match of Object.values(data.matches || {})) {
-    if (String(match.clubId) !== CLUB_ID) continue;
+    if (String(match.clubId) !== clubId) continue;
     const p = findPlayer(match, link);
     if (!p || !POSITIONS.includes(p.position)) continue;
     if (match.termination || match.minutes === null || match.minutes < 90 || p.secondsPlayed === null || p.secondsPlayed < MIN_PLAYER_SECONDS) {

@@ -1,6 +1,8 @@
 'use strict';
 const { Client, Events } = require('discord.js');
 const { createService } = require('./player-form/service');
+const { createStore } = require('./player-form/store');
+const { locolinho } = require('./power-ranking/store');
 const services = new WeakMap();
 module.exports = function installPlayerFormHook() {
   if (Client.prototype.__playerFormHook) return;
@@ -9,18 +11,31 @@ module.exports = function installPlayerFormHook() {
   Client.prototype.login = function (...args) {
     const client = this;
     client.once(Events.ClientReady, () => {
-      const service = createService(client);
-      services.set(client, service);
-      const tick = () => service.tick().catch(e => console.error('[player-form] Aktualisierung fehlgeschlagen:', e.message));
-      tick(); const timer = setInterval(tick, 60 * 1000); timer.unref?.();
-      console.log('[player-form] Kanal 1560060808799723601 · Loco-Rolle 1426495393742454834 · automatische Spieler-Formkurven aktiv.');
+      const clubServices = new Map([
+        ['Loco Squad', createService(client)],
+        ['Locolinho', createService(client, {
+          ...createStore('playerFormLocolinho.json'),
+          ranking: locolinho.load,
+          clubId: locolinho.defaults().club.clubId,
+          channelId: '1570488623860547725',
+          roleId: '1570482104788197409',
+          rankingChannel: '1570488814567428106',
+        })],
+      ]);
+      services.set(client, clubServices);
+      for (const [clubName, service] of clubServices) {
+        const tick = () => service.tick().catch(error => console.error(`[player-form] ${clubName}:`, error.message));
+        tick();
+        const timer = setInterval(tick, 60 * 1000);
+        timer.unref?.();
+      }
     });
     return originalLogin.apply(this, args);
   };
 };
 
-module.exports.refresh = async function refreshPlayerForms(client) {
-  const service = services.get(client);
+module.exports.refresh = async function refreshPlayerForms(client, clubName = 'Loco Squad') {
+  const service = services.get(client)?.get(clubName);
   if (!service) throw new Error('Die Spieler-Formkurve ist noch nicht gestartet.');
   return service.refresh();
 };

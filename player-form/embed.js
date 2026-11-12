@@ -15,15 +15,15 @@ function metric(label, key, suffix, row) {
   const arrow = n === null || p === null ? '' : Math.abs(n - p) < (suffix === '%' ? 0.5 : 0.05) ? ' →' : n > p ? ' ↗️' : ' ↘️';
   return `${label}: **${value(n, suffix)}**${row.comparable ? ` · zuvor ${value(p, suffix)}${arrow}` : ''}`;
 }
-function payload(member, link, data) {
+function payload(member, link, data, { clubId, rankingChannel } = {}) {
   const embed = new EmbedBuilder().setColor(0xe84a8a).setTitle(String(link?.playerName || member.displayName).slice(0, 256))
     .setFooter({ text: marker(member.id) });
   const avatar = member.displayAvatarURL?.({ size: 128 }); if (avatar) embed.setThumbnail(avatar);
   if (!link) {
-    embed.setDescription(`<@${member.id}>\nEA-Profil noch nicht verknüpft. Bitte im Loco-Power-Ranking über **EA-Profil verknüpfen** verbinden.`);
+    embed.setDescription(`<@${member.id}>\nEA-Profil noch nicht verknüpft. Bitte in ${rankingChannel ? `<#${rankingChannel}>` : 'Loco-Power-Ranking'} über **EA-Profil verknüpfen** verbinden.`);
     for (const label of Object.values(LABELS)) embed.addFields({ name: label, value: 'Ohne EA-Verknüpfung noch keine Zuordnung möglich.' });
   } else {
-    const form = playerForm(data, link);
+    const form = playerForm(data, link, clubId);
     embed.setDescription(`<@${member.id}> · EA: **${String(link.playerName || link.playerId).replace(/([\\*_`~|<>])/g, '\\$1')}**\nJe Bereich: letzte 5 Einsätze gegenüber den 5 davor.\nNur erfasste Friendly Matches von 20 bis 4 Uhr; vorzeitige Enden und Einsätze unter 45 Minuten ausgeschlossen.`);
     let latest = null;
     for (const [position, row] of Object.entries(form.positions)) {
