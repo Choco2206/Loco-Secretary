@@ -1043,9 +1043,8 @@ const squad = createRanking({
   clubName: 'Loco Squad',
 });
 
-const locolinhoChannelId = '1570499656004411572';
 const locolinho = createRanking({
-  channels: { admin: locolinhoChannelId, ranking: locolinhoChannelId },
+  channels: { admin: '1570499656004411572', ranking: '1570488814567428106' },
   roleId: '1570482104788197409',
   store: squadStore.createStore('powerRankingLocolinho.json', {
     clubId: '492736',
