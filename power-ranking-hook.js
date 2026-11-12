@@ -41,6 +41,7 @@ let scheduleRunning = false;
 
 function isAdmin(interaction) {
   return interaction.user.id === OWNER_USER_ID
+    || (clubName === 'Locolinho' && interaction.channelId === CHANNELS.admin && interaction.user.id === '1509591285567328336')
     || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
 }
 
