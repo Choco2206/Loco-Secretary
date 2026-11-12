@@ -5,16 +5,16 @@ const { REST, Routes, ChannelType, PermissionFlagsBits } = require('discord.js')
 const sourceId = '1544644642811936849';
 const roleId = '1570482104788197409';
 const statsId = '1570161388481945661';
-const categoryName = '🏆 • Locolinho';
+const categoryName = '🏆 • Locolino';
 const channelNames = [
-  '📢︱Ankündigungen', '💬︱Chat-Locolinho', '📋︱Kaderliste',
+  '📢︱Ankündigungen', '💬︱Chat-Locolino', '📋︱Kaderliste',
   '🔢︱Trikotnummer', '🧠︱Spielkonzept', '🎮︱Controller-Basics',
   '🏟️︱Club-Facilities', '📋︱Aufstellung-Liga',
-  '📊︱Spielstatistiken-Locolinho', '📈︱Spieler-Formkurve',
+  '📊︱Spielstatistiken-Locolino', '📈︱Spieler-Formkurve',
   '🔥︱VPG-Germany', '🅿️︱ProLeague', '🦁︱RPL', '🇩🇪︱DCB',
-  '🥇︱Liga-Ruhmeshalle', '⚡︱Loco-Linio-Power-Ranking',
-  '👑︱Loco-Linio-der-Woche', '🎙️︱Liga Day',
-  '🎙️︱Locolinho Talk / Chillzone', '🎙️︱Privat',
+  '🥇︱Liga-Ruhmeshalle', '⚡︱Loco-Lino-Power-Ranking',
+  '👑︱Loco-Lino-der-Woche', '🎙️︱Liga Day',
+  '🎙️︱Locolino Talk / Chillzone', '🎙️︱Privat',
 ];
 
 async function provision() {
@@ -32,11 +32,11 @@ async function provision() {
     rest.get(route),
     rest.get(Routes.user('@me')),
   ]);
-  if (!roles.some(role => role.id === roleId)) throw new Error('Locolinho role not found');
+  if (!roles.some(role => role.id === roleId)) throw new Error('Locolino role not found');
 
   const categories = channels.filter(channel =>
     channel.type === ChannelType.GuildCategory && channel.name === categoryName);
-  if (categories.length > 1) throw new Error('Multiple matching Locolinho categories');
+  if (categories.length > 1) throw new Error('Multiple matching Locolino categories');
 
   const view = PermissionFlagsBits.ViewChannel.toString();
   const permissionOverwrites = [
@@ -46,7 +46,7 @@ async function provision() {
   ];
   const stats = channels.find(channel => channel.id === statsId);
   if (!stats || stats.type !== ChannelType.GuildText || stats.parent_id === sourceId) {
-    throw new Error('Expected existing Locolinho stats channel outside the source category');
+    throw new Error('Expected existing Locolino stats channel outside the source category');
   }
 
   const category = categories[0] ?? await rest.post(route, {
@@ -73,7 +73,7 @@ async function provision() {
     positions.push({ id: channel.id, position });
   }
   await rest.patch(route, { body: positions });
-  console.log('Locolinho category %s provisioned with %s channels', category.id, positions.length);
+  console.log('Locolino category %s provisioned with %s channels', category.id, positions.length);
 }
 
 provision().catch(error => {
