@@ -12,8 +12,8 @@ const channelNames = [
   '🏟️︱Club-Facilities', '📋︱Aufstellung-Liga',
   '📊︱Spielstatistiken-Locolino', '📈︱Spieler-Formkurve',
   '🔥︱VPG-Germany', '🅿️︱ProLeague', '🦁︱RPL', '🇩🇪︱DCB',
-  '🥇︱Liga-Ruhmeshalle', '⚡︱Loco-Lino-Power-Ranking',
-  '👑︱Loco-Lino-der-Woche', '🎙️︱Liga Day',
+  '🥇︱Liga-Ruhmeshalle', '⚡︱Locolino-Power-Ranking',
+  '👑︱Locolino-der-Woche', '🎙️︱Liga Day',
   '🎙️︱Locolino Talk / Chillzone', '🎙️︱Privat',
 ];
 
