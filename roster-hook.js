@@ -1,12 +1,26 @@
 const path = require('path');
 const { Client, Events, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
-const ROSTER_CHANNEL_ID = '1543944303607414865';
-const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
 const ROSTER_TITLE = 'Aktuelle Kaderliste';
 const ACCENT_COLOR = 0xe84a8a;
 const ROSTER_BANNER_PATH = path.join(__dirname, 'assets', 'kaderliste-banner.png');
 const ROSTER_BANNER_NAME = 'kaderliste-banner.png';
+
+const ROSTERS = [
+  {
+    channelId: '1543944303607414865',
+    roleId: '1426495393742454834',
+    clubName: 'Loco Squad',
+    roleLabel: 'Loco-Squad-Rolle',
+    banner: true,
+  },
+  {
+    channelId: '1570488474052595762',
+    roleId: '1570482104788197409',
+    clubName: 'Locolinho',
+    roleLabel: 'Locolinho-Rolle',
+  },
+];
 
 const HP_POSITIONS = [
   { key: 'TW', roleId: '1486360144785834114', group: 'goalkeeper' },
@@ -27,7 +41,7 @@ const GROUPS = [
 ];
 
 const RELEVANT_ROLE_IDS = new Set([
-  LOCO_SQUAD_ROLE_ID,
+  ...ROSTERS.map((roster) => roster.roleId),
   ...HP_POSITIONS.map((position) => position.roleId),
 ]);
 
@@ -61,12 +75,11 @@ async function loadGuildMembers(guild) {
   return [...guild.members.cache.values()];
 }
 
-async function buildRosterEmbed(guild) {
-  const members = await loadGuildMembers(guild);
+function buildRosterEmbed(members, config) {
   const roster = Object.fromEntries(GROUPS.map((group) => [group.key, []]));
 
   const players = members
-    .filter((member) => !member.user.bot && member.roles.cache.has(LOCO_SQUAD_ROLE_ID))
+    .filter((member) => !member.user.bot && member.roles.cache.has(config.roleId))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de'));
 
   for (const member of players) {
@@ -78,12 +91,12 @@ async function buildRosterEmbed(guild) {
     });
   }
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(ACCENT_COLOR)
     .setTitle(ROSTER_TITLE)
     .setDescription([
-      'Das ist unser aktueller Kader von **Loco Squad**.',
-      'Die Liste aktualisiert sich automatisch anhand der **Loco-Squad-Rolle** und der jeweiligen **Hauptposition**.',
+      `Das ist unser aktueller Kader von **${config.clubName}**.`,
+      `Die Liste aktualisiert sich automatisch anhand der **${config.roleLabel}** und der jeweiligen **Hauptposition**.`,
     ].join('\n'))
     .addFields(
       GROUPS.map((group) => ({
@@ -91,22 +104,24 @@ async function buildRosterEmbed(guild) {
         value: formatMembers(roster[group.key]),
       }))
     )
-    .setImage(`attachment://${ROSTER_BANNER_NAME}`)
-    .setFooter({ text: `${players.length} Mitglieder mit der Rolle Loco Squad` })
+    .setFooter({ text: `${players.length} Mitglieder mit der Rolle ${config.clubName}` })
     .setTimestamp();
+
+  if (config.banner) embed.setImage(`attachment://${ROSTER_BANNER_NAME}`);
+  return embed;
 }
 
-async function refreshRoster(client, guild) {
-  const channel = client.channels.cache.get(ROSTER_CHANNEL_ID)
-    || await client.channels.fetch(ROSTER_CHANNEL_ID).catch(() => null);
+async function resolveRosterChannel(client, config) {
+  const channel = client.channels.cache.get(config.channelId)
+    || await client.channels.fetch(config.channelId).catch(() => null);
+  if (channel?.guild && channel.isTextBased()) return channel;
 
-  if (!channel?.isTextBased()) {
-    console.error('[roster] Kaderlisten-Kanal nicht erreichbar:', ROSTER_CHANNEL_ID);
-    return;
-  }
+  console.error('[roster] Kaderlisten-Kanal nicht erreichbar:', config.channelId);
+  return null;
+}
 
-  const embed = await buildRosterEmbed(guild);
-  const banner = new AttachmentBuilder(ROSTER_BANNER_PATH, { name: ROSTER_BANNER_NAME });
+async function refreshRoster(client, channel, members, config) {
+  const embed = buildRosterEmbed(members, config);
   const messages = await channel.messages.fetch({ limit: 30 });
   const existing = [...messages.values()].find((message) =>
     message.author?.id === client.user.id &&
@@ -116,7 +131,9 @@ async function refreshRoster(client, guild) {
   const payload = {
     embeds: [embed],
     allowedMentions: { parse: [] },
-    files: [banner],
+    files: config.banner
+      ? [new AttachmentBuilder(ROSTER_BANNER_PATH, { name: ROSTER_BANNER_NAME })]
+      : [],
   };
 
   if (existing) {
@@ -129,6 +146,32 @@ async function refreshRoster(client, guild) {
   }
 }
 
+const refreshes = new Map();
+
+function refreshGuildRosters(client, guild) {
+  const previous = refreshes.get(guild.id) || Promise.resolve();
+  const refresh = previous.catch(() => {}).then(async () => {
+    const channels = await Promise.all(ROSTERS.map((config) => resolveRosterChannel(client, config)));
+    const targets = ROSTERS.map((config, index) => ({ config, channel: channels[index] }))
+      .filter(({ channel }) => channel?.guild.id === guild.id);
+    if (!targets.length) return;
+
+    const members = await loadGuildMembers(guild);
+    await Promise.all(targets.map(async ({ config, channel }) => {
+      try {
+        await refreshRoster(client, channel, members, config);
+      } catch (error) {
+        console.error(`[roster] Aktualisierung für ${config.clubName} fehlgeschlagen:`, error.message);
+      }
+    }));
+  }).finally(() => {
+    if (refreshes.get(guild.id) === refresh) refreshes.delete(guild.id);
+  });
+
+  refreshes.set(guild.id, refresh);
+  return refresh;
+}
+
 function scheduleRosterRefresh(client, guild) {
   const previousTimer = updateTimers.get(guild.id);
   if (previousTimer) clearTimeout(previousTimer);
@@ -136,7 +179,7 @@ function scheduleRosterRefresh(client, guild) {
   const timer = setTimeout(async () => {
     updateTimers.delete(guild.id);
     try {
-      await refreshRoster(client, guild);
+      await refreshGuildRosters(client, guild);
     } catch (error) {
       console.error('[roster] Aktualisierung fehlgeschlagen:', error.message);
     }
@@ -164,12 +207,9 @@ module.exports = function installRosterHook() {
 
     client.once(Events.ClientReady, async () => {
       try {
-        const channel = client.channels.cache.get(ROSTER_CHANNEL_ID)
-          || await client.channels.fetch(ROSTER_CHANNEL_ID).catch(() => null);
-        if (channel?.guild) {
-          await refreshRoster(client, channel.guild);
-          console.log('[roster] Automatische Loco-Kaderliste aktiv.');
-        }
+        const channels = await Promise.all(ROSTERS.map((config) => resolveRosterChannel(client, config)));
+        const guilds = new Map(channels.filter(Boolean).map(({ guild }) => [guild.id, guild]));
+        await Promise.all([...guilds.values()].map((guild) => refreshGuildRosters(client, guild)));
       } catch (error) {
         console.error('[roster] Start fehlgeschlagen:', error.message);
       }
