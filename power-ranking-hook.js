@@ -18,16 +18,14 @@ const {
   UserSelectMenuBuilder,
 } = require('discord.js');
 const { getClubMembers, getFriendlyMatches, searchClubs } = require('./power-ranking/ea-client');
-const store = require('./power-ranking/store');
+const squadStore = require('./power-ranking/store');
 const { POSITION_LABELS, SCORING, normalizePosition, scorePerformance } = require('./power-ranking/scoring');
 const { publishAward, TEXT_VERSION } = require('./power-ranking/weekly-award');
 
-const CHANNELS = Object.freeze({
-  admin: '1547550736622157844',
-  ranking: '1547550537216426045',
-  playerOfWeek: '1547551244170568046',
-});
-const LOCO_SQUAD_ROLE_ID = '1426495393742454834';
+function createRanking({ channels: CHANNELS, roleId, store, clubName, componentPrefix = '', title = 'Loco Power Ranking' }) {
+const adminTitle = `👑 ${title} · Admin`;
+const rankingTitle = `👑 ${title}`;
+const componentId = (id) => componentPrefix + id;
 const OWNER_USER_ID = '1425580097661833443';
 const ACCENT_COLOR = 0xe84a8a;
 const POLL_INTERVAL_MS = 10 * 60 * 1000;
@@ -217,7 +215,7 @@ async function fetchMembers(guild) {
     console.error('[power-ranking] Mitgliederliste nicht vollständig geladen:', error.message);
   }
   return [...guild.members.cache.values()]
-    .filter((member) => !member.user.bot && member.roles.cache.has(LOCO_SQUAD_ROLE_ID));
+    .filter((member) => !member.user.bot && member.roles.cache.has(roleId));
 }
 
 async function channel(client, id) {
@@ -227,16 +225,16 @@ async function channel(client, id) {
 function adminButtons(active) {
   return [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('pr_club_search').setLabel('EA-Club suchen').setEmoji('🔎').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('pr_start').setLabel('Wertung starten').setEmoji('▶️').setStyle(ButtonStyle.Success).setDisabled(active),
-      new ButtonBuilder().setCustomId('pr_stop').setLabel('Wertung beenden').setEmoji('⏹️').setStyle(ButtonStyle.Danger).setDisabled(!active),
-      new ButtonBuilder().setCustomId('pr_check').setLabel('EA jetzt prüfen').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(componentId('pr_club_search')).setLabel('EA-Club suchen').setEmoji('🔎').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(componentId('pr_start')).setLabel('Wertung starten').setEmoji('▶️').setStyle(ButtonStyle.Success).setDisabled(active),
+      new ButtonBuilder().setCustomId(componentId('pr_stop')).setLabel('Wertung beenden').setEmoji('⏹️').setStyle(ButtonStyle.Danger).setDisabled(!active),
+      new ButtonBuilder().setCustomId(componentId('pr_check')).setLabel('EA jetzt prüfen').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
     ),
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('pr_manage_matches').setLabel('Spiele verwalten').setEmoji('📋').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('pr_admin_link').setLabel('EA-ID zuweisen').setEmoji('🎮').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('pr_unlink_player').setLabel('EA-Link löschen').setEmoji('🔗').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('pr_refresh').setLabel('Übersicht aktualisieren').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(componentId('pr_manage_matches')).setLabel('Spiele verwalten').setEmoji('📋').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(componentId('pr_admin_link')).setLabel('EA-ID zuweisen').setEmoji('🎮').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(componentId('pr_unlink_player')).setLabel('EA-Link löschen').setEmoji('🔗').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(componentId('pr_refresh')).setLabel('Übersicht aktualisieren').setStyle(ButtonStyle.Secondary),
     ),
   ];
 }
@@ -244,7 +242,7 @@ function adminButtons(active) {
 function platformMenu() {
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId('pr_platform')
+      .setCustomId(componentId('pr_platform'))
       .setPlaceholder('Plattform auswählen')
       .addOptions([
         { label: 'PS5 / Xbox Series / PC', value: 'common-gen5', description: 'Aktuelle Konsolen- und PC-Generation' },
@@ -255,13 +253,13 @@ function platformMenu() {
 
 function clubNameModal(platform) {
   return new ModalBuilder()
-    .setCustomId(`pr_club_modal:${platform}`)
+    .setCustomId(componentId(`pr_club_modal:${platform}`))
     .setTitle('EA-Club suchen')
     .addComponents(new ActionRowBuilder().addComponents(
       new TextInputBuilder()
         .setCustomId('club_name')
         .setLabel('Exakter Clubname')
-        .setPlaceholder('Loco Squad')
+        .setPlaceholder(clubName)
         .setRequired(true)
         .setMaxLength(40)
         .setStyle(TextInputStyle.Short)
@@ -304,11 +302,11 @@ async function ensureAdminPanel(client, guild) {
     : '**EA-Club:** noch nicht eingerichtet';
   const embed = new EmbedBuilder()
     .setColor(ACCENT_COLOR)
-    .setTitle('👑 Loco Power Ranking · Admin')
-    .setDescription([status, '⏰ Automatisch täglich 20:00–04:00 Uhr · deutsche Zeit · Prüfung alle 10 Minuten', '', club, '', `**Verknüpft: ${linked}/${members.length}**`, lines.join('\n') || 'Keine Loco-Squad-Spieler gefunden.'].join('\n'))
+    .setTitle(adminTitle)
+    .setDescription([status, '⏰ Automatisch täglich 20:00–04:00 Uhr · deutsche Zeit · Prüfung alle 10 Minuten', '', club, '', `**Verknüpft: ${linked}/${members.length}**`, lines.join('\n') || `Keine Spieler mit der Rolle ${clubName} gefunden.`].join('\n'))
     .setFooter({ text: 'Die Club-ID wird automatisch über die EA-Clubsuche ermittelt.' })
     .setTimestamp();
-  const message = await upsertBotMessage(target, '👑 Loco Power Ranking · Admin', {
+  const message = await upsertBotMessage(target, adminTitle, {
     embeds: [embed], components: adminButtons(Boolean(session)), allowedMentions: { parse: [] },
   }, data.messages.admin);
   if (message.id !== data.messages.admin) store.update((next) => { next.messages.admin = message.id; return next; });
@@ -375,8 +373,8 @@ function points(value) {
 
 function linkButton() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('pr_link_player').setLabel('EA-Profil verknüpfen').setEmoji('🎮').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId('pr_show_me').setLabel('Meine Werte').setEmoji('📊').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(componentId('pr_link_player')).setLabel('EA-Profil verknüpfen').setEmoji('🎮').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(componentId('pr_show_me')).setLabel('Meine Werte').setEmoji('📊').setStyle(ButtonStyle.Secondary)
   );
 }
 
@@ -403,7 +401,7 @@ function scoringExplanationFields() {
   }
   fields.push({
     name: '🏆 Wer steht vorne?',
-    value: 'Die höchste Gesamtpunktzahl gewinnt. Bei Gleichstand entscheiden der Reihe nach: mehr Spiele, mehr Punkte pro Spiel, höhere Durchschnittsbewertung, mehr EA-Man-of-the-Match-Auszeichnungen. Positionsführende werden nach der am häufigsten gespielten Positionsgruppe zugeordnet. Es zählen nur verknüpfte Loco-Squad-Spieler und freigegebene Spiele aus den gestarteten Wertungszeiträumen.',
+    value: 'Die höchste Gesamtpunktzahl gewinnt. Bei Gleichstand entscheiden der Reihe nach: mehr Spiele, mehr Punkte pro Spiel, höhere Durchschnittsbewertung, mehr EA-Man-of-the-Match-Auszeichnungen. Positionsführende werden nach der am häufigsten gespielten Positionsgruppe zugeordnet. Es zählen nur verknüpfte Spieler mit der passenden Clubrolle und freigegebene Spiele aus den gestarteten Wertungszeiträumen.',
   });
   return fields;
 }
@@ -431,7 +429,7 @@ async function ensureRanking(client, guild) {
     const status = data.session ? '🟢 Wertung läuft' : '🔴 Wertung ausgeschaltet';
     const embed = new EmbedBuilder()
       .setColor(ACCENT_COLOR)
-      .setTitle('👑 Loco Power Ranking')
+      .setTitle(rankingTitle)
       .setDescription([
         `**${currentWeek.replace('-W', ' · KW ')}** · ${status}`,
         '', '**GESAMTRANKING**', list.join('\n') || '*Noch keine gewerteten Spiele in dieser Woche.*',
@@ -440,7 +438,7 @@ async function ensureRanking(client, guild) {
       .addFields(...scoringExplanationFields())
       .setFooter({ text: 'Montag 07:00 Uhr beginnt eine neue Rankingwoche.' })
       .setTimestamp();
-    const message = await upsertBotMessage(target, '👑 Loco Power Ranking', {
+    const message = await upsertBotMessage(target, rankingTitle, {
       embeds: [embed], components: [linkButton()], allowedMentions: { parse: [] },
     }, data.messages.ranking);
     if (message.id !== data.messages.ranking) store.update((next) => { next.messages.ranking = message.id; return next; });
@@ -576,7 +574,7 @@ function playerSelectionPayload(players, requestedPage = 0, prefix = 'pr_player'
   const result = paginatePlayers(players, requestedPage);
   const select = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId(`${prefix}_select`)
+      .setCustomId(componentId(`${prefix}_select`))
       .setPlaceholder(`EA-Profil auswählen · Seite ${result.page + 1}/${result.pageCount}`)
       .addOptions(result.items.map((player, index) => ({
         label: player.playerName.slice(0, 100),
@@ -585,13 +583,13 @@ function playerSelectionPayload(players, requestedPage = 0, prefix = 'pr_player'
   );
   const navigation = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`${prefix}_previous`)
+      .setCustomId(componentId(`${prefix}_previous`))
       .setLabel('Zurück')
       .setEmoji('⬅️')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(result.page === 0),
     new ButtonBuilder()
-      .setCustomId(`${prefix}_next`)
+      .setCustomId(componentId(`${prefix}_next`))
       .setLabel('Weiter')
       .setEmoji('➡️')
       .setStyle(ButtonStyle.Secondary)
@@ -605,8 +603,8 @@ function playerSelectionPayload(players, requestedPage = 0, prefix = 'pr_player'
 }
 
 async function handlePlayerLink(interaction, client) {
-  if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) {
-    return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
+  if (!interaction.member.roles.cache.has(roleId)) {
+    return interaction.reply({ content: `Diese Funktion ist nur für Spieler mit der Rolle ${clubName}.`, flags: MessageFlags.Ephemeral });
   }
   const data = store.load();
   if (!data.club) return interaction.reply({ content: 'Der EA-Club wurde noch nicht eingerichtet.', flags: MessageFlags.Ephemeral });
@@ -629,7 +627,7 @@ async function handlePlayerLink(interaction, client) {
         && (!nameOwner || nameOwner === interaction.user.id);
     })
     .slice(0, 50);
-  if (!players.length) return interaction.editReply('EA hat aktuell keine freien Spielerprofile in der Mitgliederliste von Loco Squad geliefert.');
+  if (!players.length) return interaction.editReply(`EA hat aktuell keine freien Spielerprofile für ${clubName} geliefert.`);
   const selection = { players, page: 0, expiresAt: Date.now() + 10 * 60 * 1000 };
   pendingPlayerSelections.set(interaction.user.id, selection);
   return interaction.editReply(playerSelectionPayload(players, selection.page));
@@ -639,7 +637,7 @@ function recentMatchesMenu(data) {
   const matches = Object.values(data.matches).sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp))).slice(0, 25);
   if (!matches.length) return null;
   return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder().setCustomId('pr_match_toggle').setPlaceholder('Spiel ein-/ausschließen')
+    new StringSelectMenuBuilder().setCustomId(componentId('pr_match_toggle')).setPlaceholder('Spiel ein-/ausschließen')
       .addOptions(matches.map((match) => ({
         label: `${match.excluded ? '🚫' : '✅'} ${match.ownGoals ?? '?'}:${match.opponentGoals ?? '?'} vs. ${match.opponentName}`.slice(0, 100),
         description: `${formatBerlin(match.timestamp)} · ${match.performances?.length || 0} Spielerwerte`.slice(0, 100),
@@ -653,6 +651,7 @@ async function archiveWeekIfNeeded(client, guild) {
   weeklyRunning = true;
   try {
     await closeRankingWeek(client, guild);
+    if (!CHANNELS.playerOfWeek) return;
     const archives = store.load().weeklyArchive;
     const pending = Object.entries(archives).filter(([, archive]) => archive.publicationStatus === 'pending'
       || (archive.publicationStatus === 'posted' && archive.textMessageId && archive.textVersion !== TEXT_VERSION));
@@ -722,6 +721,7 @@ function assignManualProfile(data, targetId, player, adminId, expectedClubId) {
 }
 
 async function refreshPlayerForms(client) {
+  if (componentPrefix) return false;
   try {
     await require('./player-form-hook').refresh(client);
     return true;
@@ -732,20 +732,21 @@ async function refreshPlayerForms(client) {
 }
 
 async function handleInteraction(interaction, client) {
-  const id = interaction.customId || '';
-  if (!id.startsWith('pr_')) return;
+  const customId = interaction.customId || '';
+  if (!customId.startsWith(`${componentPrefix}pr_`) || !interaction.guild) return;
+  const id = customId.slice(componentPrefix.length);
 
   try {
     if (interaction.isButton() && id === 'pr_admin_link') {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       return interaction.reply({ content: 'Wähle den Loco-Spieler aus, dem du ein EA-Profil zuweisen möchtest. Eine vorhandene Zuordnung dieses Spielers wird ersetzt.',
-        components: [new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId('pr_admin_link_user').setPlaceholder('Loco-Spieler auswählen').setMinValues(1).setMaxValues(1))], flags: MessageFlags.Ephemeral });
+        components: [new ActionRowBuilder().addComponents(new UserSelectMenuBuilder().setCustomId(componentId('pr_admin_link_user')).setPlaceholder('Loco-Spieler auswählen').setMinValues(1).setMaxValues(1))], flags: MessageFlags.Ephemeral });
     }
     if (interaction.isUserSelectMenu() && id === 'pr_admin_link_user') {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       await interaction.deferUpdate();
       const target = await interaction.guild.members.fetch(interaction.values[0]);
-      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply({ content: 'Bitte ein Mitglied mit der Loco-Squad-Rolle auswählen.', components: [] });
+      if (target.user.bot || !target.roles.cache.has(roleId)) return interaction.editReply({ content: `Bitte ein Mitglied mit der Rolle ${clubName} auswählen.`, components: [] });
       const data = store.load();
       if (!data.club) return interaction.editReply({ content: 'Der EA-Club wurde noch nicht eingerichtet.', components: [] });
       const result = await Promise.allSettled([getClubMembers(data.club.clubId, data.club.platform), getFriendlyMatches(data.club.clubId, data.club.platform, 50)]);
@@ -778,7 +779,7 @@ async function handleInteraction(interaction, client) {
       if (!player) return interaction.update({ content: 'Dieses EA-Profil konnte nicht zugeordnet werden. Bitte erneut starten.', components: [] });
       await interaction.deferUpdate();
       const target = await interaction.guild.members.fetch(selection.targetId);
-      if (target.user.bot || !target.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.editReply({ content: 'Dieser Spieler hat keine Loco-Squad-Rolle mehr.', components: [] });
+      if (target.user.bot || !target.roles.cache.has(roleId)) return interaction.editReply({ content: `Dieser Spieler hat die Rolle ${clubName} nicht mehr.`, components: [] });
       store.update(next => assignManualProfile(next, selection.targetId, player, interaction.user.id, selection.clubId));
       pendingAdminPlayerSelections.delete(interaction.user.id);
       await refreshPlayerForms(client);
@@ -804,7 +805,7 @@ async function handleInteraction(interaction, client) {
       if (!clubs.length) return interaction.editReply(`EA hat keinen Club mit dem Namen **${clubName}** gefunden.`);
       pendingClubSearches.set(interaction.user.id, { platform, platformLabel, clubs, expiresAt: Date.now() + 10 * 60 * 1000 });
       const menu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder().setCustomId('pr_club_select').setPlaceholder('Gefundenen EA-Club auswählen')
+        new StringSelectMenuBuilder().setCustomId(componentId('pr_club_select')).setPlaceholder('Gefundenen EA-Club auswählen')
           .addOptions(clubs.map((club) => ({ label: club.name.slice(0, 100), value: club.clubId, description: `EA Club-ID ${club.clubId}`.slice(0, 100) })))
       );
       return interaction.editReply({ content: 'Wähle den richtigen Club aus. Die ID speichert der Bot automatisch:', components: [menu] });
@@ -855,7 +856,7 @@ async function handleInteraction(interaction, client) {
     if (interaction.isButton() && id === 'pr_unlink_player') {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       const menu = new ActionRowBuilder().addComponents(
-        new UserSelectMenuBuilder().setCustomId('pr_unlink_user').setPlaceholder('Spieler auswählen').setMinValues(1).setMaxValues(1)
+        new UserSelectMenuBuilder().setCustomId(componentId('pr_unlink_user')).setPlaceholder('Spieler auswählen').setMinValues(1).setMaxValues(1)
       );
       return interaction.reply({ content: 'Wessen EA-Verknüpfung möchtest du löschen?', components: [menu], flags: MessageFlags.Ephemeral });
     }
@@ -891,12 +892,13 @@ async function handleInteraction(interaction, client) {
       if (!isAdmin(interaction)) return interaction.reply({ content: 'Diese Funktion ist nur für die Teamleitung.', flags: MessageFlags.Ephemeral });
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await refreshPanels(client, interaction.guild);
+      if (componentPrefix) return interaction.editReply('✅ Admin-Übersicht und Ranking wurden aktualisiert.');
       const formUpdated = await refreshPlayerForms(client);
       return interaction.editReply(formUpdated ? '✅ Admin-Übersicht, Ranking und Spieler-Formkurven wurden aktualisiert.' : '✅ Admin-Übersicht und Ranking wurden aktualisiert. Die Formkurven konnten gerade nicht aktualisiert werden. Bitte erneut versuchen.');
     }
     if (interaction.isButton() && id === 'pr_link_player') return handlePlayerLink(interaction, client);
     if (interaction.isButton() && ['pr_player_previous', 'pr_player_next'].includes(id)) {
-      if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
+      if (!interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: `Diese Funktion ist nur für Spieler mit der Rolle ${clubName}.`, flags: MessageFlags.Ephemeral });
       const selection = pendingPlayerSelections.get(interaction.user.id);
       if (!selection || selection.expiresAt < Date.now()) {
         pendingPlayerSelections.delete(interaction.user.id);
@@ -910,7 +912,7 @@ async function handleInteraction(interaction, client) {
       return interaction.update({ content: payload.content, components: payload.components });
     }
     if (interaction.isStringSelectMenu() && id === 'pr_player_select') {
-      if (!interaction.member.roles.cache.has(LOCO_SQUAD_ROLE_ID)) return interaction.reply({ content: 'Diese Funktion ist nur für Loco-Squad-Spieler.', flags: MessageFlags.Ephemeral });
+      if (!interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: `Diese Funktion ist nur für Spieler mit der Rolle ${clubName}.`, flags: MessageFlags.Ephemeral });
       const selection = pendingPlayerSelections.get(interaction.user.id);
       if (!selection || selection.expiresAt < Date.now()) {
         pendingPlayerSelections.delete(interaction.user.id);
@@ -937,6 +939,7 @@ async function handleInteraction(interaction, client) {
       return;
     }
     if (interaction.isButton() && id === 'pr_show_me') {
+      if (!interaction.member.roles.cache.has(roleId)) return interaction.reply({ content: `Diese Funktion ist nur für Spieler mit der Rolle ${clubName}.`, flags: MessageFlags.Ephemeral });
       const data = store.load();
       const link = data.links[interaction.user.id];
       if (!link || String(link.clubId) !== String(data.club?.clubId)) return interaction.reply({ content: 'Du hast für den aktuellen EA-Club noch kein Spielerprofil verknüpft.', flags: MessageFlags.Ephemeral });
@@ -958,9 +961,7 @@ async function handleInteraction(interaction, client) {
   }
 }
 
-module.exports = function installPowerRankingHook() {
-  if (Client.prototype.__locoPowerRankingHookInstalled) return;
-  Client.prototype.__locoPowerRankingHookInstalled = true;
+function install() {
   const originalLogin = Client.prototype.login;
 
   Client.prototype.login = function patchedLogin(...args) {
@@ -971,10 +972,10 @@ module.exports = function installPowerRankingHook() {
         const admin = await channel(client, CHANNELS.admin);
         const guild = admin?.guild;
         if (!guild) throw new Error('Admin-Panel-Kanal nicht erreichbar.');
+        await refreshPanels(client, guild);
         await syncScheduledSession(client, guild);
         await archiveWeekIfNeeded(client, guild);
-        await refreshPanels(client, guild);
-        console.log('[power-ranking] Loco Power Ranking aktiv.');
+        console.log(`[power-ranking] ${title} aktiv.`);
       } catch (error) {
         console.error('[power-ranking] Start fehlgeschlagen:', error.message);
       }
@@ -1010,7 +1011,7 @@ module.exports = function installPowerRankingHook() {
 
     client.on(Events.InteractionCreate, (interaction) => handleInteraction(interaction, client));
     client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
-      if (oldMember.roles.cache.has(LOCO_SQUAD_ROLE_ID) !== newMember.roles.cache.has(LOCO_SQUAD_ROLE_ID)) {
+      if (oldMember.roles.cache.has(roleId) !== newMember.roles.cache.has(roleId)) {
         setTimeout(() => refreshPanels(client, newMember.guild).catch(console.error), 1000);
       }
     });
@@ -1019,9 +1020,9 @@ module.exports = function installPowerRankingHook() {
     });
     return originalLogin.apply(this, args);
   };
-};
+}
 
-module.exports._test = {
+return { install, test: {
   scheduledWindow, syncScheduledSession,
   adminButtons, adminPlayerSelectionPayload, assignManualProfile, handleInteraction,
   aggregateRanking,
@@ -1032,4 +1033,37 @@ module.exports._test = {
   paginatePlayers,
   parseMatch,
   weekKey,
+} };
+}
+
+const squad = createRanking({
+  channels: { admin: '1547550736622157844', ranking: '1547550537216426045', playerOfWeek: '1547551244170568046' },
+  roleId: '1426495393742454834',
+  store: squadStore,
+  clubName: 'Loco Squad',
+});
+
+const locolinhoChannelId = '1570499656004411572';
+const locolinho = createRanking({
+  channels: { admin: locolinhoChannelId, ranking: locolinhoChannelId },
+  roleId: '1570482104788197409',
+  store: squadStore.createStore('powerRankingLocolinho.json', {
+    clubId: '492736',
+    name: 'Locolinho',
+    platform: 'common-gen5',
+    platformLabel: 'PS5 / Xbox Series / PC',
+    linkedAt: 'initial-config',
+  }),
+  clubName: 'Locolinho',
+  componentPrefix: 'locolinho:',
+  title: 'Locolinho Power Ranking',
+});
+
+module.exports = function installPowerRankingHook() {
+  if (Client.prototype.__locoPowerRankingHookInstalled) return;
+  Client.prototype.__locoPowerRankingHookInstalled = true;
+  squad.install();
+  locolinho.install();
 };
+
+module.exports._test = squad.test;

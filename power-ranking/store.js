@@ -3,18 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_FILE = path.join(__dirname, '..', 'data', 'powerRanking.json');
+function createStore(filename, club) {
+const DATA_FILE = path.join(__dirname, '..', 'data', filename);
 
 function defaults() {
   return {
     version: 1,
-    club: {
-      clubId: '46978',
-      name: 'Loco Squad',
-      platform: 'common-gen5',
-      platformLabel: 'PS5 / Xbox Series / PC',
-      linkedAt: 'initial-config',
-    },
+    club: { ...club },
     links: {},
     session: null,
     lastSession: null,
@@ -66,4 +61,15 @@ function update(updater) {
   return result;
 }
 
-module.exports = { DATA_FILE, defaults, load, save, update };
+return { DATA_FILE, defaults, load, save, update };
+}
+
+const squad = createStore('powerRanking.json', {
+  clubId: '46978',
+  name: 'Loco Squad',
+  platform: 'common-gen5',
+  platformLabel: 'PS5 / Xbox Series / PC',
+  linkedAt: 'initial-config',
+});
+
+module.exports = { ...squad, createStore };
