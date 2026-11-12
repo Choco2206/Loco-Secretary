@@ -954,9 +954,7 @@ client.once(Events.ClientReady, async (readyClient) => {
   console.log(`📌 Announcement Channel: ${CONFIG.channels.announcements}`);
   console.log(`📌 Position Channel: ${CONFIG.channels.positions}`);
 
-  ensureJerseyFile();
   await ensurePositionPanelMessage();
-  await ensureJerseyPanelMessage();
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
